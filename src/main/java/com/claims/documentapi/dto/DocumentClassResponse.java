@@ -18,7 +18,7 @@ public class DocumentClassResponse {
     
     @Data
     public static class AttributeDefinition {
-        private String name;
+        private String id;
         private String displayName;
         private String type;
         private Integer length;

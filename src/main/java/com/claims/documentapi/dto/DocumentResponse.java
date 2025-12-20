@@ -2,25 +2,16 @@ package com.claims.documentapi.dto;
 
 import lombok.Data;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Map;
 
 @Data
 public class DocumentResponse {
     private String id;
-    private String name;
     private String documentClassId;
     private String documentClassName;
-    private List<DocumentAttribute> attributes;
-    private String status;
+    private Map<String, Object> attributes;
     private String createdBy;
+    private String modifiedBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    
-    @Data
-    public static class DocumentAttribute {
-        private String name;
-        private String displayName;
-        private String type;
-        private Object value;
-    }
 }

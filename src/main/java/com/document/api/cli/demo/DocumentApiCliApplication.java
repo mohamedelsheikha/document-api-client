@@ -5,6 +5,7 @@ import com.claims.documentapi.dto.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 /**
@@ -73,17 +74,18 @@ public class DocumentApiCliApplication {
     private void showAdminMenu() {
         System.out.println("\n--- Admin Menu ---");
         System.out.println("1. List Document Classes");
-        System.out.println("2. Create Document Class");
-        System.out.println("3. Modify Document Class");
-        System.out.println("4. List Users");
-        System.out.println("5. List Groups");
-        System.out.println("6. List Privileges");
-        System.out.println("7. Create Privilege");
-        System.out.println("8. Delete Privilege");
-        System.out.println("9. List Documents");
-        System.out.println("10. Create Document");
-        System.out.println("11. Logout");
-        System.out.println("12. Exit");
+        System.out.println("2. Get Single Document Class");
+        System.out.println("3. Create Document Class");
+        System.out.println("4. Modify Document Class");
+        System.out.println("5. List Users");
+        System.out.println("6. List Groups");
+        System.out.println("7. List Privileges");
+        System.out.println("8. Create Privilege");
+        System.out.println("9. Delete Privilege");
+        System.out.println("10. List Documents");
+        System.out.println("11. Create Document");
+        System.out.println("12. Logout");
+        System.out.println("13. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -93,41 +95,118 @@ public class DocumentApiCliApplication {
                 listDocumentClasses();
                 break;
             case 2:
-                createDocumentClass();
+                getDocumentClassInfo();
                 break;
             case 3:
-                modifyDocumentClass();
+                createDocumentClass();
                 break;
             case 4:
-                listUsers();
+                modifyDocumentClass();
                 break;
             case 5:
-                listGroups();
+                listUsers();
                 break;
             case 6:
-                listPrivileges();
+                listGroups();
                 break;
             case 7:
-                createPrivilege();
+                listPrivileges();
                 break;
             case 8:
-                deletePrivilege();
+                createPrivilege();
                 break;
             case 9:
-                listDocuments();
+                deletePrivilege();
                 break;
             case 10:
-                createDocument();
+                listDocuments();
                 break;
             case 11:
-                logout();
+                createDocument();
                 break;
             case 12:
+                logout();
+                break;
+            case 13:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
             default:
                 System.out.println("Invalid option!");
+        }
+    }
+
+    private void getDocumentClassInfo() {
+        System.out.println("\n--- Document Class Info menu ---");
+        System.out.println("1. By ID");
+        System.out.println("2. By name");
+        System.out.println("3. Exit");
+        System.out.print("Choose option: ");
+
+        int choice = getIntInput();
+
+        switch (choice) {
+            case 1:
+                getDocumentClassInfoById();
+                break;
+            case 2:
+                getDocumentClassInfoByName();
+                break;
+            case 3:
+                System.out.println("Goodbye!");
+                System.exit(0);
+                break;
+            default:
+                System.out.println("Invalid option!");
+        }
+
+    }
+
+    private void getDocumentClassInfoByName() {
+        System.out.print("Document Class Name: ");
+        String name = scanner.nextLine();
+        try {
+            DocumentClassResponse documentClassInfo = client.getDocumentClassByName(name);
+            printDocumentClassInfo(documentClassInfo);
+        } catch (Exception e) {
+            System.out.println("Get Document Class by name failed: " + e.getMessage());
+        }
+
+    }
+
+    private void getDocumentClassInfoById() {
+        System.out.print("Document Class ID: ");
+        String id = scanner.nextLine();
+        try {
+            DocumentClassResponse documentClassInfo = client.getDocumentClassById(id);
+            printDocumentClassInfo(documentClassInfo);
+        } catch (Exception e) {
+            System.out.println("Get Document Class by ID failed: " + e.getMessage());
+        }
+    }
+
+    //TODO: to be implemented
+    private void printDocumentClassInfo(DocumentClassResponse docClass) {
+        System.out.println("ID: " + docClass.getId());
+        System.out.println("Name: " + docClass.getName());
+        System.out.println("Display Name: " + docClass.getDisplayName());
+        System.out.println("Description: " + docClass.getDescription());
+        System.out.println("Created By: " + docClass.getCreatedBy());
+        System.out.println("Attributes: " + (docClass.getAttributes() != null ? docClass.getAttributes().size() : 0));
+        printAttributes(docClass.getAttributes());
+        System.out.println("---");
+    }
+
+    private void printAttributes(List<DocumentClassResponse.AttributeDefinition> attributes) {
+        System.out.println("\n--- Attributes ---");
+        for (DocumentClassResponse.AttributeDefinition attr : attributes) {
+            System.out.println("ID: " + attr.getId());
+            System.out.println("Display name: " + attr.getDisplayName());
+            System.out.println("Type: " + attr.getType());
+            System.out.println("Length: " + attr.getLength());
+            System.out.println("Required: " + attr.isRequired());
+            System.out.println("Multi valued: " + attr.isMultiValue());
+            System.out.println("---");
         }
     }
 
@@ -209,13 +288,7 @@ public class DocumentApiCliApplication {
             System.out.println("\n--- Document Classes (" + classes.size() + ") ---");
 
             for (DocumentClassResponse docClass : classes) {
-                System.out.println("ID: " + docClass.getId());
-                System.out.println("Name: " + docClass.getName());
-                System.out.println("Display Name: " + docClass.getDisplayName());
-                System.out.println("Description: " + docClass.getDescription());
-                System.out.println("Attributes: " + (docClass.getAttributes() != null ? docClass.getAttributes().size() : 0));
-                System.out.println("Created By: " + docClass.getCreatedBy());
-                System.out.println("---");
+                printDocumentClassInfo(docClass);
             }
 
         } catch (Exception e) {
@@ -286,7 +359,7 @@ public class DocumentApiCliApplication {
             String id = scanner.nextLine();
 
             // First, get the current document class
-            DocumentClassResponse current = client.getDocumentClass(id);
+            DocumentClassResponse current = client.getDocumentClassById(id);
             System.out.println("Current Document Class:");
             System.out.println("Name: " + current.getName());
             System.out.println("Display Name: " + current.getDisplayName());
@@ -306,7 +379,7 @@ public class DocumentApiCliApplication {
             List<DocumentClassRequest.AttributeDefinition> attributeDefinitions = new ArrayList<>();
             for (DocumentClassResponse.AttributeDefinition currentAttr : current.getAttributes()) {
                 DocumentClassRequest.AttributeDefinition requestAttr = new DocumentClassRequest.AttributeDefinition();
-                requestAttr.setName(currentAttr.getName());
+                requestAttr.setName(currentAttr.getId());
                 requestAttr.setType(currentAttr.getType());
                 requestAttr.setIndexed(currentAttr.isIndexed());
                 requestAttr.setRequired((currentAttr.isRequired()));
@@ -420,12 +493,7 @@ public class DocumentApiCliApplication {
             System.out.println("\n--- Documents (" + documents.size() + ") ---");
 
             for (DocumentResponse doc : documents) {
-                System.out.println("ID: " + doc.getId());
-                System.out.println("Name: " + doc.getName());
-                System.out.println("Class: " + doc.getDocumentClassName());
-                System.out.println("Status: " + doc.getStatus());
-                System.out.println("Created By: " + doc.getCreatedBy());
-                System.out.println("Created At: " + doc.getCreatedAt());
+                printDocument(doc);
                 System.out.println("---");
             }
 
@@ -434,23 +502,140 @@ public class DocumentApiCliApplication {
         }
     }
 
+    private void printDocument(DocumentResponse doc) {
+        System.out.println("ID: " + doc.getId());
+        System.out.println("Class: " + doc.getDocumentClassName());
+        System.out.println("Created By: " + doc.getCreatedBy());
+        System.out.println("Created At: " + doc.getCreatedAt());
+        System.out.println("--- Attributes ---");
+        for (Map.Entry<String, Object> attr : doc.getAttributes().entrySet()) {
+            System.out.println("    " + attr.getKey() + ": " + attr.getValue());
+        }
+    }
+
     private void createDocument() {
+        try {
+            System.out.println("Select document type:");
+            System.out.println("1. Generic Document");
+            System.out.println("2. Claim Document with Attachments");
+            System.out.print("Choice (1-2): ");
+            
+            String choice = scanner.nextLine().trim();
+            
+            if ("2".equals(choice)) {
+                createClaimDocumentWithAttachments();
+            } else {
+                createGenericDocument();
+            }
+            
+        } catch (Exception e) {
+            System.out.println("Failed to create document: " + e.getMessage());
+        }
+    }
+    
+    private void createGenericDocument() {
         try {
             System.out.print("Document Name: ");
             String name = scanner.nextLine();
             System.out.print("Document Class ID: ");
             String classId = scanner.nextLine();
 
+            // find document class by id
+            DocumentClassResponse docClass = client.getDocumentClassById(classId);
+
             DocumentRequest request = new DocumentRequest();
             request.setName(name);
             request.setDocumentClassId(classId);
 
+            System.out.print("\n--- Document attribute entry ---  ");
+            String attrVal;
+            for (DocumentClassResponse.AttributeDefinition attrDef : docClass.getAttributes()) {
+                System.out.print(attrDef.getDisplayName() + ": ");
+                attrVal = scanner.nextLine();
+                request.getAttributes().put(attrDef.getId(), attrVal);
+            }
+
             DocumentResponse response = client.createDocument(request);
             System.out.println("Document created successfully!");
             System.out.println("ID: " + response.getId());
+            printDocument(response);
 
         } catch (Exception e) {
-            System.out.println("Failed to create document: " + e.getMessage());
+            System.out.println("Failed to create generic document: " + e.getMessage());
+        }
+    }
+    
+    private void createClaimDocumentWithAttachments() {
+        try {
+            System.out.print("Claim Number: ");
+            String claimNumber = scanner.nextLine();
+            
+            System.out.print("Claimant Names (comma-separated): ");
+            String claimantNamesStr = scanner.nextLine();
+            List<String> claimantNames = List.of(claimantNamesStr.split("\\s*,\\s*"));
+            
+            System.out.print("Date of Loss (YYYY-MM-DD): ");
+            String dateOfLossStr = scanner.nextLine();
+            java.time.LocalDate dateOfLoss = java.time.LocalDate.parse(dateOfLossStr);
+            
+            System.out.print("Description: ");
+            String description = scanner.nextLine();
+
+            // Handle file attachments
+            List<java.io.File> attachmentFiles = new ArrayList<>();
+            System.out.println("\n--- Add file attachments (optional) ---");
+            
+            while (true) {
+                System.out.print("Enter file path (or empty to finish): ");
+                String filePath = scanner.nextLine().trim();
+                
+                if (filePath.isEmpty()) {
+                    break;
+                }
+                
+                java.io.File file = new java.io.File(filePath);
+                if (file.exists() && file.isFile()) {
+                    attachmentFiles.add(file);
+                    System.out.println("Added: " + file.getName() + " (" + file.length() + " bytes)");
+                } else {
+                    System.out.println("File not found: " + filePath);
+                }
+            }
+            
+            // Create claim document request
+            ClaimDocumentRequest request = new ClaimDocumentRequest();
+            request.setClaimNumber(claimNumber);
+            request.setClaimantNames(claimantNames);
+            request.setDateOfLoss(dateOfLoss);
+            request.setDescription(description);
+            
+            // Upload with attachments
+            ClaimDocumentResponse response;
+            if (attachmentFiles.isEmpty()) {
+                // Upload without files (URL-based or metadata only)
+                response = client.uploadDocumentFromUrl(request, "");
+            } else {
+                // Upload with files
+                java.io.File mainFile = attachmentFiles.get(0);
+                java.io.File[] additionalFiles = attachmentFiles.subList(1, attachmentFiles.size()).toArray(new java.io.File[0]);
+                response = client.uploadDocument(request, mainFile, additionalFiles);
+            }
+            
+            System.out.println("Claim document created successfully!");
+            System.out.println("ID: " + response.getId());
+            System.out.println("Claim Number: " + response.getClaimNumber());
+            System.out.println("Description: " + response.getDescription());
+            
+            if (response.getDocuments() != null && !response.getDocuments().isEmpty()) {
+                System.out.println("Uploaded Files:");
+                for (DocumentDto doc : response.getDocuments()) {
+                    System.out.println("  - " + doc.getFileName() + " (" + doc.getFileSize() + " bytes)");
+                }
+            }
+
+        } catch (Exception e) {
+            System.out.println("Failed to create claim document: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -468,27 +653,7 @@ public class DocumentApiCliApplication {
     }
 
     private void searchDocuments() {
-        try {
-            System.out.print("Search term: ");
-            String searchTerm = scanner.nextLine();
-
-            // For demo purposes, we'll just list all documents
-            // In a real implementation, you'd use the search API
-            List<DocumentResponse> documents = client.getDocuments();
-            System.out.println("\n--- Search Results (" + documents.size() + ") ---");
-
-            for (DocumentResponse doc : documents) {
-                if (doc.getName().toLowerCase().contains(searchTerm.toLowerCase())) {
-                    System.out.println("ID: " + doc.getId());
-                    System.out.println("Name: " + doc.getName());
-                    System.out.println("Class: " + doc.getDocumentClassName());
-                    System.out.println("---");
-                }
-            }
-
-        } catch (Exception e) {
-            System.out.println("Failed to search documents: " + e.getMessage());
-        }
+        System.out.println("Not implemented...");
     }
 
     private void addAttachment() {

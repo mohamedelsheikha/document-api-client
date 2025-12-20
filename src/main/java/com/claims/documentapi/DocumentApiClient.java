@@ -5,13 +5,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.List;
 
 /**
@@ -100,7 +107,7 @@ public class DocumentApiClient {
         }
     }
     
-    public DocumentClassResponse getDocumentClass(String id) {
+    public DocumentClassResponse getDocumentClassById(String id) {
         try {
             ResponseEntity<DocumentClassResponse> response = exchange("/api/admin/document-classes/" + id, HttpMethod.GET, null, DocumentClassResponse.class);
             return response.getBody();
@@ -109,7 +116,17 @@ public class DocumentApiClient {
             throw e;
         }
     }
-    
+
+    public DocumentClassResponse getDocumentClassByName(String name) {
+        try {
+            ResponseEntity<DocumentClassResponse> response = exchange("/api/admin/document-classes/name/" + name, HttpMethod.GET, null, DocumentClassResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get document class: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
     public DocumentClassResponse createDocumentClass(DocumentClassRequest request) {
         try {
             ResponseEntity<DocumentClassResponse> response = exchange("/api/admin/document-classes", HttpMethod.POST, request, DocumentClassResponse.class);
@@ -242,6 +259,151 @@ public class DocumentApiClient {
         } catch (HttpClientErrorException e) {
             log.error("Failed to delete document: {}", e.getResponseBodyAsString());
             throw e;
+        }
+    }
+    
+    // Document Upload Methods
+    
+    /**
+     * Upload a claim document with files (multipart/form-data)
+     */
+    public ClaimDocumentResponse uploadDocument(ClaimDocumentRequest request, java.io.File file, java.io.File... additionalFiles) {
+        try {
+            java.util.List<org.springframework.web.multipart.MultipartFile> files = new java.util.ArrayList<>();
+            
+            // Convert File to MultipartFile
+            if (file != null && file.exists()) {
+                files.add(convertToMultipartFile(file));
+            }
+            for (java.io.File additionalFile : additionalFiles) {
+                if (additionalFile != null && additionalFile.exists()) {
+                    files.add(convertToMultipartFile(additionalFile));
+                }
+            }
+            
+            return uploadDocumentWithFiles(request, files);
+        } catch (Exception e) {
+            log.error("Failed to upload document with files: {}", e.getMessage());
+            throw new RuntimeException("Failed to upload document with files", e);
+        }
+    }
+    
+    /**
+     * Upload a claim document from URL
+     */
+    public ClaimDocumentResponse uploadDocumentFromUrl(ClaimDocumentRequest request, String documentUrl) {
+        try {
+            // Create request with URL
+            ClaimDocumentRequest urlRequest = new ClaimDocumentRequest();
+            urlRequest.setClaimNumber(request.getClaimNumber());
+            urlRequest.setClaimantNames(request.getClaimantNames());
+            urlRequest.setDateOfLoss(request.getDateOfLoss());
+            urlRequest.setDescription(request.getDescription());
+            
+            // Add URL to request (you may need to modify the DTO to support this)
+            // For now, we'll send the URL in the description or create a new field
+            
+            ResponseEntity<ClaimDocumentResponse> response = exchange("/api/claims", HttpMethod.POST, urlRequest, ClaimDocumentResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to upload document from URL: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
+    /**
+     * Upload a claim document with multiple files (multipart/form-data)
+     */
+    public ClaimDocumentResponse uploadDocumentWithFiles(ClaimDocumentRequest request, List<MultipartFile> files) {
+        try {
+            // Create multipart request
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            body.add("request", request);
+            
+            // Add files to request
+            for (MultipartFile file : files) {
+                if (file != null && !file.isEmpty()) {
+                    body.add("files", new ByteArrayResource(file.getBytes()) {
+                        @Override
+                        public String getFilename() {
+                            return file.getOriginalFilename();
+                        }
+                    });
+                }
+            }
+            
+            // Set headers for multipart request
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            
+            // Create request entity
+            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+            
+            // Make the request
+            ResponseEntity<ClaimDocumentResponse> response = restTemplate.postForEntity(
+                baseUrl + "/api/claims", 
+                requestEntity, 
+                ClaimDocumentResponse.class
+            );
+            
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("Failed to upload document with files: {}", e.getMessage());
+            throw new RuntimeException("Failed to upload document with files", e);
+        }
+    }
+    
+    /**
+     * Convert File to MultipartFile
+     */
+    private MultipartFile convertToMultipartFile(File file) {
+        try {
+            return new MultipartFile() {
+                @Override
+                public String getName() {
+                    return "file";
+                }
+                
+                @Override
+                public String getOriginalFilename() {
+                    return file.getName();
+                }
+                
+                @Override
+                public String getContentType() {
+                    return "application/octet-stream";
+                }
+                
+                @Override
+                public boolean isEmpty() {
+                    return file.length() == 0;
+                }
+                
+                @Override
+                public long getSize() {
+                    return file.length();
+                }
+                
+                @Override
+                public byte[] getBytes() throws IOException {
+                    return Files.readAllBytes(file.toPath());
+                }
+                
+                @Override
+                public InputStream getInputStream() throws IOException {
+                    return new FileInputStream(file);
+                }
+                
+                @Override
+                public void transferTo(File dest) throws IOException, IllegalStateException {
+                    if (dest == null) {
+                        throw new IllegalArgumentException("Destination file cannot be null");
+                    }
+                    Files.copy(file.toPath(), dest.toPath());
+                }
+            };
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to convert file to MultipartFile", e);
         }
     }
 }

@@ -510,24 +510,19 @@ public class DocumentApiCliApplication {
                         for (DocumentDto attachment : attachments) {
                             System.out.println("  File: " + attachment.getFileName());
                             System.out.println("  Size: " + attachment.getFileSize() + " bytes");
-                            System.out.println("  Type: " + attachment.getFileType());
+                            System.out.println("  Type: " + attachment.getContentType());
                             
                             // Get presigned URL for this attachment
                             try {
                                 // Use the database attachment ID directly
                                 String attachmentId = attachment.getId();
                                 
-                                System.out.println("DEBUG: Attachment ID: " + attachmentId);
-                                System.out.println("DEBUG: Document ID: " + doc.getId());
-                                System.out.println("DEBUG: S3 Key: " + attachment.getS3Key());
-                                System.out.println("DEBUG: Calling getAttachmentDownloadUrl...");
-                                
                                 if (attachmentId != null) {
                                     String downloadUrl = client.getAttachmentDownloadUrl(doc.getId(), attachmentId);
-                                    System.out.println("DEBUG: Raw response: " + downloadUrl);
-                                    
+
                                     if (downloadUrl != null && !downloadUrl.isEmpty()) {
                                         System.out.println("  Download URL: " + downloadUrl);
+                                        System.out.println("  NOTE: If URL gives NoSuchKey error, the S3 key may not exist in the bucket");
                                     } else {
                                         System.out.println("  Download URL: Not available (empty response)");
                                     }

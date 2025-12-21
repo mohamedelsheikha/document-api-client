@@ -40,14 +40,14 @@ public class DocumentApiClient {
         this.objectMapper = new ObjectMapper();
         this.baseUrl = baseUrl;
     }
-    
+
     /**
      * Set authentication token for subsequent requests
      */
     public void setAuthToken(String token) {
         this.authToken = token;
     }
-    
+
     /**
      * Clear authentication token
      */
@@ -233,6 +233,16 @@ public class DocumentApiClient {
         }
     }
     
+    public DocumentResponse getDocument(String id) {
+        try {
+            ResponseEntity<DocumentResponse> response = exchange("/api/documents/" + id, HttpMethod.GET, null, DocumentResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get document: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
     public DocumentResponse createDocument(DocumentRequest request) {
         try {
             ResponseEntity<DocumentResponse> response = exchange("/api/documents", HttpMethod.POST, request, DocumentResponse.class);
@@ -240,6 +250,86 @@ public class DocumentApiClient {
         } catch (HttpClientErrorException e) {
             log.error("Failed to create document: {}", e.getResponseBodyAsString());
             throw e;
+        }
+    }
+
+    public UploadResponse uploadAttachmentToDocumentId(String id, File file) {
+        try {
+            // Create multipart request body
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            
+            // Add file as ByteArrayResource with null safety
+            byte[] fileBytes = Files.readAllBytes(file.toPath());
+            body.add("file", new ByteArrayResource(fileBytes) {
+                @Override
+                public String getFilename() {
+                    return file.getName();
+                }
+            });
+            
+            // Create authenticated headers for multipart request
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            if (authToken != null) {
+                headers.setBearerAuth(authToken);
+            }
+            
+            // Create request entity
+            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+            
+            // Use RestTemplate exchange for multipart upload with authentication
+            ResponseEntity<UploadResponse> response = restTemplate.exchange(
+                baseUrl + "/api/documents/" + id + "/attachments",
+                HttpMethod.POST,
+                requestEntity,
+                UploadResponse.class
+            );
+            
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("Failed to upload attachment to document {}: {}", id, e.getMessage());
+            throw new RuntimeException("Failed to upload attachment", e);
+        }
+    }
+
+    public UploadResponse uploadMultipleAttachments(String id, List<File> files) {
+        try {
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+
+            // Add multiple files
+            for (File file : files) {
+                body.add("files", new ByteArrayResource(Files.readAllBytes(file.toPath())) {
+                    @Override
+                    public String getFilename() {
+                        return file.getName();
+                    }
+                });
+            }
+
+            // Add metadata if needed
+            body.add("documentId", id);
+            body.add("uploadedBy", "user123");
+
+            // Create authenticated headers for multipart request
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            if (authToken != null) {
+                headers.setBearerAuth(authToken);
+            }
+
+            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+
+            ResponseEntity<UploadResponse> response = restTemplate.exchange(
+                    baseUrl + "/api/documents/" + id + "/attachments/batch",
+                    HttpMethod.POST,
+                    requestEntity,
+                    UploadResponse.class
+            );
+
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("Failed to upload multiple attachments: {}", e.getMessage());
+            throw new RuntimeException("Failed to upload attachments", e);
         }
     }
     
@@ -303,7 +393,7 @@ public class DocumentApiClient {
             // Add URL to request (you may need to modify the DTO to support this)
             // For now, we'll send the URL in the description or create a new field
             
-            ResponseEntity<ClaimDocumentResponse> response = exchange("/api/claims", HttpMethod.POST, urlRequest, ClaimDocumentResponse.class);
+            ResponseEntity<ClaimDocumentResponse> response = exchange("/api/documents", HttpMethod.POST, urlRequest, ClaimDocumentResponse.class);
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to upload document from URL: {}", e.getResponseBodyAsString());

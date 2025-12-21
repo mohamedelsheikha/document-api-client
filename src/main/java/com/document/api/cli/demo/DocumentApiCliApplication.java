@@ -84,8 +84,9 @@ public class DocumentApiCliApplication {
         System.out.println("9. Delete Privilege");
         System.out.println("10. List Documents");
         System.out.println("11. Create Document");
-        System.out.println("12. Logout");
-        System.out.println("13. Exit");
+        System.out.println("12. Upload attachment to an existing document");
+        System.out.println("13. Logout");
+        System.out.println("14. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -125,9 +126,12 @@ public class DocumentApiCliApplication {
                 createDocument();
                 break;
             case 12:
-                logout();
+                uploadAttachmentToExistingDocument();
                 break;
             case 13:
+                logout();
+                break;
+            case 14:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -213,12 +217,13 @@ public class DocumentApiCliApplication {
     private void showUserMenu() {
         System.out.println("\n--- User Menu ---");
         System.out.println("1. Create Document");
-        System.out.println("2. Delete Document");
-        System.out.println("3. Search Documents");
-        System.out.println("4. List My Documents");
-        System.out.println("5. Add Attachment to Document");
-        System.out.println("6. Logout");
-        System.out.println("7. Exit");
+        System.out.println("2. Upload attachment to existing document");
+        System.out.println("3. Delete Document");
+        System.out.println("4. Search Documents");
+        System.out.println("5. List My Documents");
+        System.out.println("6. Add Attachment to Document");
+        System.out.println("7. Logout");
+        System.out.println("8. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -228,21 +233,24 @@ public class DocumentApiCliApplication {
                 createDocument();
                 break;
             case 2:
-                deleteDocument();
+                uploadAttachmentToExistingDocument();
                 break;
             case 3:
-                searchDocuments();
+                deleteDocument();
                 break;
             case 4:
-                listDocuments();
+                searchDocuments();
                 break;
             case 5:
-                addAttachment();
+                listDocuments();
                 break;
             case 6:
-                logout();
+                addAttachment();
                 break;
             case 7:
+                logout();
+                break;
+            case 8:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -649,6 +657,91 @@ public class DocumentApiCliApplication {
 
         } catch (Exception e) {
             System.out.println("Failed to delete document: " + e.getMessage());
+        }
+    }
+    
+    private void uploadAttachmentToExistingDocument() {
+        try {
+            // First, list existing documents for user to choose from
+            System.out.println("\n--- Existing Documents ---");
+            List<DocumentResponse> documents = client.getDocuments();
+            
+            if (documents.isEmpty()) {
+                System.out.println("No documents found. Please create a document first.");
+                return;
+            }
+            
+            // Display documents for selection
+            for (int i = 0; i < documents.size(); i++) {
+                DocumentResponse doc = documents.get(i);
+                System.out.printf("%d. ID: %s | Class: %s | Created: %s%n", 
+                    i + 1, doc.getId(), doc.getDocumentClassName(), doc.getCreatedAt());
+            }
+            
+            System.out.print("\nSelect document by number (1-" + documents.size() + "): ");
+            int choice = getIntInput();
+            
+            if (choice < 1 || choice > documents.size()) {
+                System.out.println("Invalid selection!");
+                return;
+            }
+            
+            DocumentResponse selectedDocument = documents.get(choice - 1);
+            String documentId = selectedDocument.getId();
+            
+            System.out.println("\nSelected document: " + selectedDocument.getId());
+            System.out.println("Document Class: " + selectedDocument.getDocumentClassName());
+            
+            // Handle file attachments
+            List<java.io.File> attachmentFiles = new ArrayList<>();
+            System.out.println("\n--- Add file attachments ---");
+            
+            while (true) {
+                System.out.print("Enter file path (or empty to finish): ");
+                String filePath = scanner.nextLine().trim();
+                
+                if (filePath.isEmpty()) {
+                    break;
+                }
+                
+                java.io.File file = new java.io.File(filePath);
+                if (file.exists() && file.isFile()) {
+                    attachmentFiles.add(file);
+                    System.out.println("Added: " + file.getName() + " (" + file.length() + " bytes)");
+                } else {
+                    System.out.println("File not found: " + filePath);
+                }
+            }
+            
+            if (attachmentFiles.isEmpty()) {
+                System.out.println("No files selected. Upload cancelled.");
+                return;
+            }
+            
+            // Upload attachments
+            System.out.println("\nUploading " + attachmentFiles.size() + " file(s) to document " + documentId + "...");
+            
+            if (attachmentFiles.size() == 1) {
+                // Single file upload
+                java.io.File file = attachmentFiles.get(0);
+                UploadResponse response = client.uploadAttachmentToDocumentId(documentId, file);
+                System.out.println("Attachment uploaded successfully!");
+                System.out.println("Response: " + response);
+            } else {
+                // Multiple files upload
+                UploadResponse response = client.uploadMultipleAttachments(documentId, attachmentFiles);
+                System.out.println("Multiple attachments uploaded successfully!");
+                System.out.println("Response: " + response);
+            }
+            
+            // Show updated document info
+            System.out.println("\n--- Updated Document ---");
+            DocumentResponse updatedDoc = client.getDocument(documentId);
+            printDocument(updatedDoc);
+            
+        } catch (Exception e) {
+            System.out.println("Failed to upload attachment: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

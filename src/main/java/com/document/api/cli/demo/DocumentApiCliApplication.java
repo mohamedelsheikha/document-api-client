@@ -189,7 +189,6 @@ public class DocumentApiCliApplication {
         }
     }
 
-    //TODO: to be implemented
     private void printDocumentClassInfo(DocumentClassResponse docClass) {
         System.out.println("ID: " + docClass.getId());
         System.out.println("Name: " + docClass.getName());

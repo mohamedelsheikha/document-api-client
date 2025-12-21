@@ -333,6 +333,36 @@ public class DocumentApiClient {
         }
     }
     
+    public List<DocumentDto> getDocumentAttachments(String documentId) {
+        try {
+            ResponseEntity<List<DocumentDto>> response = exchange(
+                "/api/documents/" + documentId + "/attachments", 
+                HttpMethod.GET, 
+                null, 
+                new ParameterizedTypeReference<List<DocumentDto>>() {}
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get document attachments: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
+    public String getAttachmentDownloadUrl(String documentId, String attachmentId) {
+        try {
+            ResponseEntity<String> response = exchange(
+                "/api/documents/" + documentId + "/attachments/" + attachmentId + "/download", 
+                HttpMethod.GET, 
+                null, 
+                String.class
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get attachment download URL: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
     public DocumentResponse updateDocument(String id, DocumentRequest request) {
         try {
             ResponseEntity<DocumentResponse> response = exchange("/api/documents/" + id, HttpMethod.PUT, request, DocumentResponse.class);

@@ -501,6 +501,68 @@ public class DocumentApiCliApplication {
 
             for (DocumentResponse doc : documents) {
                 printDocument(doc);
+                
+                // Retrieve and display attachments with presigned URLs
+                try {
+                    List<DocumentDto> attachments = client.getDocumentAttachments(doc.getId());
+                    if (attachments != null && !attachments.isEmpty()) {
+                        System.out.println("--- Attachments (" + attachments.size() + ") ---");
+                        for (DocumentDto attachment : attachments) {
+                            System.out.println("  File: " + attachment.getFileName());
+                            System.out.println("  Size: " + attachment.getFileSize() + " bytes");
+                            System.out.println("  Type: " + attachment.getFileType());
+                            
+                            // Get presigned URL for this attachment
+                            try {
+                                // Extract attachment ID from filename path
+                                String fileName = attachment.getFileName();
+                                String attachmentId = null;
+                                
+                                if (fileName != null && fileName.contains("/")) {
+                                    // Extract UUID from path: documents/docId/attachmentId.extension
+                                    String[] parts = fileName.split("/");
+                                    if (parts.length >= 2) {
+                                        String lastPart = parts[parts.length - 1];
+                                        // Remove file extension to get attachment ID
+                                        int dotIndex = lastPart.lastIndexOf('.');
+                                        if (dotIndex > 0) {
+                                            attachmentId = lastPart.substring(0, dotIndex);
+                                        } else {
+                                            attachmentId = lastPart;
+                                        }
+                                    }
+                                }
+                                
+                                System.out.println("DEBUG: Filename: " + fileName);
+                                System.out.println("DEBUG: Extracted Attachment ID: " + attachmentId);
+                                System.out.println("DEBUG: Document ID: " + doc.getId());
+                                System.out.println("DEBUG: Calling getAttachmentDownloadUrl...");
+                                
+                                if (attachmentId != null) {
+                                    String downloadUrl = client.getAttachmentDownloadUrl(doc.getId(), attachmentId);
+                                    System.out.println("DEBUG: Raw response: " + downloadUrl);
+                                    
+                                    if (downloadUrl != null && !downloadUrl.isEmpty()) {
+                                        System.out.println("  Download URL: " + downloadUrl);
+                                    } else {
+                                        System.out.println("  Download URL: Not available (empty response)");
+                                    }
+                                } else {
+                                    System.out.println("  Download URL: Could not extract attachment ID from filename");
+                                }
+                            } catch (Exception urlError) {
+                                System.out.println("  Download URL: Failed to generate (" + urlError.getMessage() + ")");
+                                urlError.printStackTrace();
+                            }
+                            System.out.println();
+                        }
+                    } else {
+                        System.out.println("--- Attachments: None ---");
+                    }
+                } catch (Exception attachError) {
+                    System.out.println("--- Attachments: Failed to retrieve (" + attachError.getMessage() + ") ---");
+                }
+                
                 System.out.println("---");
             }
 

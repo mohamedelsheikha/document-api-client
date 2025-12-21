@@ -563,19 +563,7 @@ public class DocumentApiCliApplication {
 
     private void createDocument() {
         try {
-            System.out.println("Select document type:");
-            System.out.println("1. Generic Document");
-            System.out.println("2. Claim Document with Attachments");
-            System.out.print("Choice (1-2): ");
-            
-            String choice = scanner.nextLine().trim();
-            
-            if ("2".equals(choice)) {
-                createClaimDocumentWithAttachments();
-            } else {
-                createGenericDocument();
-            }
-            
+            createGenericDocument();
         } catch (Exception e) {
             System.out.println("Failed to create document: " + e.getMessage());
         }
@@ -583,8 +571,6 @@ public class DocumentApiCliApplication {
     
     private void createGenericDocument() {
         try {
-            System.out.print("Document Name: ");
-            String name = scanner.nextLine();
             System.out.print("Document Class ID: ");
             String classId = scanner.nextLine();
 
@@ -592,10 +578,9 @@ public class DocumentApiCliApplication {
             DocumentClassResponse docClass = client.getDocumentClassById(classId);
 
             DocumentRequest request = new DocumentRequest();
-            request.setName(name);
             request.setDocumentClassId(classId);
 
-            System.out.print("\n--- Document attribute entry ---  ");
+            System.out.println("\n--- Document attribute entry ---  ");
             String attrVal;
             for (DocumentClassResponse.AttributeDefinition attrDef : docClass.getAttributes()) {
                 System.out.print(attrDef.getDisplayName() + ": ");
@@ -613,80 +598,6 @@ public class DocumentApiCliApplication {
         }
     }
     
-    private void createClaimDocumentWithAttachments() {
-        try {
-            System.out.print("Claim Number: ");
-            String claimNumber = scanner.nextLine();
-            
-            System.out.print("Claimant Names (comma-separated): ");
-            String claimantNamesStr = scanner.nextLine();
-            List<String> claimantNames = List.of(claimantNamesStr.split("\\s*,\\s*"));
-            
-            System.out.print("Date of Loss (YYYY-MM-DD): ");
-            String dateOfLossStr = scanner.nextLine();
-            java.time.LocalDate dateOfLoss = java.time.LocalDate.parse(dateOfLossStr);
-            
-            System.out.print("Description: ");
-            String description = scanner.nextLine();
-
-            // Handle file attachments
-            List<java.io.File> attachmentFiles = new ArrayList<>();
-            System.out.println("\n--- Add file attachments (optional) ---");
-            
-            while (true) {
-                System.out.print("Enter file path (or empty to finish): ");
-                String filePath = scanner.nextLine().trim();
-                
-                if (filePath.isEmpty()) {
-                    break;
-                }
-                
-                java.io.File file = new java.io.File(filePath);
-                if (file.exists() && file.isFile()) {
-                    attachmentFiles.add(file);
-                    System.out.println("Added: " + file.getName() + " (" + file.length() + " bytes)");
-                } else {
-                    System.out.println("File not found: " + filePath);
-                }
-            }
-            
-            // Create claim document request
-            ClaimDocumentRequest request = new ClaimDocumentRequest();
-            request.setClaimNumber(claimNumber);
-            request.setClaimantNames(claimantNames);
-            request.setDateOfLoss(dateOfLoss);
-            request.setDescription(description);
-            
-            // Upload with attachments
-            ClaimDocumentResponse response;
-            if (attachmentFiles.isEmpty()) {
-                // Upload without files (URL-based or metadata only)
-                response = client.uploadDocumentFromUrl(request, "");
-            } else {
-                // Upload with files
-                java.io.File mainFile = attachmentFiles.get(0);
-                java.io.File[] additionalFiles = attachmentFiles.subList(1, attachmentFiles.size()).toArray(new java.io.File[0]);
-                response = client.uploadDocument(request, mainFile, additionalFiles);
-            }
-            
-            System.out.println("Claim document created successfully!");
-            System.out.println("ID: " + response.getId());
-            System.out.println("Claim Number: " + response.getClaimNumber());
-            System.out.println("Description: " + response.getDescription());
-            
-            if (response.getDocuments() != null && !response.getDocuments().isEmpty()) {
-                System.out.println("Uploaded Files:");
-                for (DocumentDto doc : response.getDocuments()) {
-                    System.out.println("  - " + doc.getFileName() + " (" + doc.getFileSize() + " bytes)");
-                }
-            }
-
-        } catch (Exception e) {
-            System.out.println("Failed to create claim document: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
     private void deleteDocument() {
         try {
             System.out.print("Document ID: ");

@@ -19,7 +19,7 @@ public class DocumentApiCliApplication {
     private LoginResponse currentUser;
 
     public static void main(String[] args) {
-        String apiUrl = args.length > 0 ? args[0] : "http://localhost:8080/api";
+        String apiUrl = args.length > 0 ? args[0] : "http://localhost:5000/api";
 
         DocumentApiCliApplication app = new DocumentApiCliApplication(apiUrl);
         app.start();
@@ -31,7 +31,7 @@ public class DocumentApiCliApplication {
 
     public void start() {
         System.out.println("=== Document Management API CLI ===");
-        System.out.println("API URL: http://localhost:8080/api");
+        System.out.println("API URL: " + client.getBaseApiUrl());
         System.out.println();
 
         // Interactive mode
@@ -85,8 +85,9 @@ public class DocumentApiCliApplication {
         System.out.println("10. List Documents");
         System.out.println("11. Create Document");
         System.out.println("12. Upload attachment to an existing document");
-        System.out.println("13. Logout");
-        System.out.println("14. Exit");
+        System.out.println("13. Search Documents");
+        System.out.println("14. Logout");
+        System.out.println("15. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -129,9 +130,12 @@ public class DocumentApiCliApplication {
                 uploadAttachmentToExistingDocument();
                 break;
             case 13:
-                logout();
+                searchDocuments();
                 break;
             case 14:
+                logout();
+                break;
+            case 15:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -510,12 +514,12 @@ public class DocumentApiCliApplication {
                         for (DocumentDto attachment : attachments) {
                             System.out.println("  File: " + attachment.getFileName());
                             System.out.println("  Size: " + attachment.getFileSize() + " bytes");
-                            System.out.println("  Type: " + attachment.getContentType());
+                            System.out.println("  Type: " + attachment.getFileType());
                             
                             // Get presigned URL for this attachment
                             try {
-                                // Use the database attachment ID directly
-                                String attachmentId = attachment.getId();
+                                // Use the document ID directly
+                                String attachmentId = attachment.getDocumentId();
                                 
                                 if (attachmentId != null) {
                                     String downloadUrl = client.getAttachmentDownloadUrl(doc.getId(), attachmentId);
@@ -558,6 +562,25 @@ public class DocumentApiCliApplication {
         System.out.println("--- Attributes ---");
         for (Map.Entry<String, Object> attr : doc.getAttributes().entrySet()) {
             System.out.println("    " + attr.getKey() + ": " + attr.getValue());
+        }
+        
+        // Display attachment URLs if available
+        if (doc.getDocuments() != null && !doc.getDocuments().isEmpty()) {
+            System.out.println("--- Attachments ---");
+            for (var attachment : doc.getDocuments()) {
+                System.out.println("    File: " + attachment.getFileName());
+                System.out.println("    Type: " + attachment.getFileType());
+                System.out.println("    Size: " + attachment.getFileSize() + " bytes");
+                if (attachment.getPresignedUrl() != null) {
+                    System.out.println("    URL: " + attachment.getPresignedUrl());
+                    if (attachment.getPresignedUrlExpiresAt() != null) {
+                        System.out.println("    Expires: " + attachment.getPresignedUrlExpiresAt());
+                    }
+                } else {
+                    System.out.println("    URL: No presigned URL available");
+                }
+                System.out.println();
+            }
         }
     }
 
@@ -697,7 +720,117 @@ public class DocumentApiCliApplication {
     }
 
     private void searchDocuments() {
-        System.out.println("Not implemented...");
+        try {
+            System.out.println("\n--- Search Documents ---");
+            
+            // Step 1: List all document classes and allow user to choose one
+            List<DocumentClassResponse> documentClasses = client.getDocumentClasses();
+            if (documentClasses.isEmpty()) {
+                System.out.println("No document classes available. Please create a document class first.");
+                return;
+            }
+            
+            System.out.println("Available Document Classes:");
+            for (int i = 0; i < documentClasses.size(); i++) {
+                System.out.println((i + 1) + ". " + documentClasses.get(i).getName() + 
+                                 " (ID: " + documentClasses.get(i).getId() + ")");
+            }
+            
+            System.out.print("Choose a document class (enter number): ");
+            int classChoice = getIntInput();
+            if (classChoice < 1 || classChoice > documentClasses.size()) {
+                System.out.println("Invalid choice!");
+                return;
+            }
+            
+            DocumentClassResponse selectedClass = documentClasses.get(classChoice - 1);
+            System.out.println("Selected class: " + selectedClass.getName());
+            
+            // Step 2: List all attribute display names of the selected document class
+            if (selectedClass.getAttributes().isEmpty()) {
+                System.out.println("This document class has no attributes defined.");
+                return;
+            }
+            
+            System.out.println("\nAvailable Attributes:");
+            for (int i = 0; i < selectedClass.getAttributes().size(); i++) {
+                var attr = selectedClass.getAttributes().get(i);
+                System.out.println((i + 1) + ". " + attr.getDisplayName() + 
+                                 " (Type: " + attr.getType() + ", Required: " + attr.isRequired() + ")");
+            }
+            
+            // Step 3: Ask user to provide values for attributes
+            Map<String, Object> attributeFilters = new java.util.HashMap<>();
+            
+            System.out.println("\nEnter filter values for attributes (press Enter to skip an attribute):");
+            for (var attr : selectedClass.getAttributes()) {
+                System.out.print(attr.getDisplayName() + " (" + attr.getType() + "): ");
+                String input = scanner.nextLine().trim();
+                
+                if (!input.isEmpty()) {
+                    // Convert input based on attribute type
+                    Object value = convertAttributeInput(input, attr.getType());
+                    if (value != null) {
+                        attributeFilters.put(attr.getId(), value);
+                    }
+                }
+            }
+            
+            // Step 4: Perform search
+            System.out.println("\nSearching documents...");
+            
+            List<DocumentResponse> results = client.searchDocuments(
+                selectedClass.getId(), 
+                attributeFilters
+            );
+            
+            // Step 5: Display results
+            if (results.isEmpty()) {
+                System.out.println("No documents found matching your criteria.");
+            } else {
+                System.out.println("Found " + results.size() + " documents:");
+                System.out.println();
+                
+                for (DocumentResponse doc : results) {
+                    printDocument(doc);
+                    System.out.println("---");
+                }
+            }
+            
+        } catch (Exception e) {
+            System.out.println("Failed to search documents: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    private Object convertAttributeInput(String input, String type) {
+        try {
+            switch (type.toLowerCase()) {
+                case "string":
+                case "text":
+                    return input;
+                case "number":
+                case "integer":
+                case "long":
+                    return Long.parseLong(input);
+                case "decimal":
+                case "double":
+                case "float":
+                    return Double.parseDouble(input);
+                case "boolean":
+                    return Boolean.parseBoolean(input);
+                case "date":
+                    return java.time.LocalDate.parse(input);
+                case "datetime":
+                    return java.time.LocalDateTime.parse(input);
+                default:
+                    System.out.println("Unsupported attribute type: " + type + ", using string value");
+                    return input;
+            }
+        } catch (Exception e) {
+            System.out.println("Invalid input for type " + type + ": " + input);
+            return null;
+        }
     }
 
     private void addAttachment() {

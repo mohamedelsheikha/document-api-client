@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Client library for Document Management API
@@ -525,5 +526,60 @@ public class DocumentApiClient {
         } catch (Exception e) {
             throw new RuntimeException("Failed to convert file to MultipartFile", e);
         }
+    }
+    
+    /**
+     * Search for documents using the document search endpoint
+     * @param searchRequest the search criteria including document class, filters, pagination, and sorting
+     * @return list of documents matching the search criteria
+     */
+    public List<DocumentResponse> searchDocuments(DocumentSearchRequest searchRequest) {
+        try {
+            ResponseEntity<List<DocumentResponse>> response = exchange("/api/documents/search", HttpMethod.POST, searchRequest, 
+                new ParameterizedTypeReference<List<DocumentResponse>>() {});
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to search documents: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
+    /**
+     * Search for documents with simplified parameters
+     * @param documentClassId the document class ID to search within
+     * @param attributeFilters optional map of attribute filters
+     * @return list of documents matching the search criteria
+     */
+    public List<DocumentResponse> searchDocuments(String documentClassId, Map<String, Object> attributeFilters) {
+        DocumentSearchRequest searchRequest = new DocumentSearchRequest();
+        searchRequest.setDocumentClassId(documentClassId);
+        searchRequest.setAttributeFilters(attributeFilters);
+        return searchDocuments(searchRequest);
+    }
+    
+    /**
+     * Search for documents with pagination and sorting
+     * @param documentClassId the document class ID to search within
+     * @param attributeFilters optional map of attribute filters
+     * @param page page number (0-based)
+     * @param size page size
+     * @param sortBy field to sort by
+     * @param sortDirection sort direction (asc/desc)
+     * @return list of documents matching the search criteria
+     */
+    public List<DocumentResponse> searchDocuments(String documentClassId, Map<String, Object> attributeFilters, 
+                                                Integer page, Integer size, String sortBy, String sortDirection) {
+        DocumentSearchRequest searchRequest = new DocumentSearchRequest();
+        searchRequest.setDocumentClassId(documentClassId);
+        searchRequest.setAttributeFilters(attributeFilters);
+        searchRequest.setPage(page);
+        searchRequest.setSize(size);
+        searchRequest.setSortBy(sortBy);
+        searchRequest.setSortDirection(sortDirection);
+        return searchDocuments(searchRequest);
+    }
+
+    public String getBaseApiUrl() {
+        return baseUrl;
     }
 }

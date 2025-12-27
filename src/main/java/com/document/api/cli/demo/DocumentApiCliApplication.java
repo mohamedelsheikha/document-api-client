@@ -3,6 +3,7 @@ package com.document.api.cli.demo;
 import com.claims.documentapi.DocumentApiClient;
 import com.claims.documentapi.dto.*;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,8 +35,38 @@ public class DocumentApiCliApplication {
         System.out.println("API URL: " + client.getBaseApiUrl());
         System.out.println();
 
+        runTest();
+
         // Interactive mode
         interactiveMode();
+    }
+
+    private void runTest() {
+        try {
+            // login
+            LoginRequest request = new LoginRequest();
+            request.setUsername("admin");
+            request.setPassword("AdminPass123!");
+
+            LoginResponse response = client.login(request);
+            currentUser = response;
+            client.setAuthToken(response.getToken());
+            System.out.println("Login successful!");
+
+            // upload document
+            String docId = "694f4739e1e581f2dfaab7a8";
+
+            List<File> files = new ArrayList<>();
+            files.add(new File("/home/mohamed/Documents/SampleDocs/sample.pdf"));
+            files.add(new File("/home/mohamed/Documents/SampleDocs/sample.txt"));
+            List<DocumentAttachmentDto> uploadResponse = client.uploadAttachments(docId, files);
+            System.out.println("Attachment(s) uploaded successfully!");
+            System.out.println("Response: " + uploadResponse);
+        } catch(Exception e) {
+            System.out.println("Error while adding an attachment" + e.getMessage());
+            e.printStackTrace();
+        }
+
     }
 
     private void interactiveMode() {
@@ -518,8 +549,7 @@ public class DocumentApiCliApplication {
                             
                             // Get presigned URL for this attachment
                             try {
-                                // Use the document ID directly
-                                String attachmentId = attachment.getDocumentId();
+                                String attachmentId = attachment.getId();
                                 
                                 if (attachmentId != null) {
                                     String downloadUrl = client.getAttachmentDownloadUrl(doc.getId(), attachmentId);
@@ -698,12 +728,14 @@ public class DocumentApiCliApplication {
             if (attachmentFiles.size() == 1) {
                 // Single file upload
                 java.io.File file = attachmentFiles.get(0);
-                UploadResponse response = client.uploadAttachmentToDocumentId(documentId, file);
+                List<File> files = new ArrayList<>();
+                files.add(file);
+                List<DocumentAttachmentDto> response = client.uploadAttachments(documentId, files);
                 System.out.println("Attachment uploaded successfully!");
                 System.out.println("Response: " + response);
             } else {
                 // Multiple files upload
-                UploadResponse response = client.uploadMultipleAttachments(documentId, attachmentFiles);
+                List<DocumentAttachmentDto> response = client.uploadAttachments(documentId, attachmentFiles);
                 System.out.println("Multiple attachments uploaded successfully!");
                 System.out.println("Response: " + response);
             }

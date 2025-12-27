@@ -1,24 +1,19 @@
 package com.claims.documentapi;
 
 import com.claims.documentapi.dto.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -32,13 +27,11 @@ import java.util.Map;
 public class DocumentApiClient {
     
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
     private String baseUrl;
     private String authToken;
     
     public DocumentApiClient(String baseUrl) {
         this.restTemplate = new RestTemplate();
-        this.objectMapper = new ObjectMapper();
         this.baseUrl = baseUrl;
     }
 
@@ -254,86 +247,50 @@ public class DocumentApiClient {
         }
     }
 
-    public UploadResponse uploadAttachmentToDocumentId(String id, File file) {
+    public List<DocumentAttachmentDto> uploadAttachments(String id, List<File> files) {
         try {
-            // Create multipart request body
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException("Document id cannot be null/blank");
+            }
+            if (files == null || files.isEmpty()) {
+                throw new IllegalArgumentException("Files list cannot be null/empty");
+            }
+
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            
-            // Add file as ByteArrayResource with null safety
-            byte[] fileBytes = Files.readAllBytes(file.toPath());
-            body.add("file", new ByteArrayResource(fileBytes) {
-                @Override
-                public String getFilename() {
-                    return file.getName();
+
+            for (File file : files) {
+                if (file == null) {
+                    continue;
                 }
-            });
-            
-            // Create authenticated headers for multipart request
+                if (!file.exists() || !file.isFile()) {
+                    throw new IllegalArgumentException("File does not exist or is not a regular file: " + file);
+                }
+                body.add("files", new FileSystemResource(file));
+            }
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
             if (authToken != null) {
                 headers.setBearerAuth(authToken);
             }
-            
-            // Create request entity
+
             HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-            
-            // Use RestTemplate exchange for multipart upload with authentication
-            ResponseEntity<UploadResponse> response = restTemplate.exchange(
-                baseUrl + "/api/documents/" + id + "/attachments",
+
+            ResponseEntity<List<DocumentAttachmentDto>> response = restTemplate.exchange(
+                baseUrl + "/api/documents/" + id + "/attachments/batch",
                 HttpMethod.POST,
                 requestEntity,
-                UploadResponse.class
-            );
-            
-            return response.getBody();
-        } catch (Exception e) {
-            log.error("Failed to upload attachment to document {}: {}", id, e.getMessage());
-            throw new RuntimeException("Failed to upload attachment", e);
-        }
-    }
-
-    public UploadResponse uploadMultipleAttachments(String id, List<File> files) {
-        try {
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-
-            // Add multiple files
-            for (File file : files) {
-                body.add("files", new ByteArrayResource(Files.readAllBytes(file.toPath())) {
-                    @Override
-                    public String getFilename() {
-                        return file.getName();
+                    new ParameterizedTypeReference<>() {
                     }
-                });
-            }
-
-            // Add metadata if needed
-            body.add("documentId", id);
-            body.add("uploadedBy", "user123");
-
-            // Create authenticated headers for multipart request
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            if (authToken != null) {
-                headers.setBearerAuth(authToken);
-            }
-
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-            ResponseEntity<UploadResponse> response = restTemplate.exchange(
-                    baseUrl + "/api/documents/" + id + "/attachments/batch",
-                    HttpMethod.POST,
-                    requestEntity,
-                    UploadResponse.class
             );
 
-            return response.getBody();
+            return response.getBody() != null ? response.getBody() : new ArrayList<>();
         } catch (Exception e) {
-            log.error("Failed to upload multiple attachments: {}", e.getMessage());
+            log.error("Failed to upload attachments to document {}: {}", id, e.getMessage());
             throw new RuntimeException("Failed to upload attachments", e);
         }
     }
-    
+
     public List<DocumentDto> getDocumentAttachments(String documentId) {
         try {
             ResponseEntity<List<DocumentDto>> response = exchange(
@@ -382,152 +339,7 @@ public class DocumentApiClient {
             throw e;
         }
     }
-    
-    // Document Upload Methods
-    
-    /**
-     * Upload a claim document with files (multipart/form-data)
-     */
-    public ClaimDocumentResponse uploadDocument(ClaimDocumentRequest request, java.io.File file, java.io.File... additionalFiles) {
-        try {
-            java.util.List<org.springframework.web.multipart.MultipartFile> files = new java.util.ArrayList<>();
-            
-            // Convert File to MultipartFile
-            if (file != null && file.exists()) {
-                files.add(convertToMultipartFile(file));
-            }
-            for (java.io.File additionalFile : additionalFiles) {
-                if (additionalFile != null && additionalFile.exists()) {
-                    files.add(convertToMultipartFile(additionalFile));
-                }
-            }
-            
-            return uploadDocumentWithFiles(request, files);
-        } catch (Exception e) {
-            log.error("Failed to upload document with files: {}", e.getMessage());
-            throw new RuntimeException("Failed to upload document with files", e);
-        }
-    }
-    
-    /**
-     * Upload a claim document from URL
-     */
-    public ClaimDocumentResponse uploadDocumentFromUrl(ClaimDocumentRequest request, String documentUrl) {
-        try {
-            // Create request with URL
-            ClaimDocumentRequest urlRequest = new ClaimDocumentRequest();
-            urlRequest.setClaimNumber(request.getClaimNumber());
-            urlRequest.setClaimantNames(request.getClaimantNames());
-            urlRequest.setDateOfLoss(request.getDateOfLoss());
-            urlRequest.setDescription(request.getDescription());
-            
-            // Add URL to request (you may need to modify the DTO to support this)
-            // For now, we'll send the URL in the description or create a new field
-            
-            ResponseEntity<ClaimDocumentResponse> response = exchange("/api/documents", HttpMethod.POST, urlRequest, ClaimDocumentResponse.class);
-            return response.getBody();
-        } catch (HttpClientErrorException e) {
-            log.error("Failed to upload document from URL: {}", e.getResponseBodyAsString());
-            throw e;
-        }
-    }
-    
-    /**
-     * Upload a claim document with multiple files (multipart/form-data)
-     */
-    public ClaimDocumentResponse uploadDocumentWithFiles(ClaimDocumentRequest request, List<MultipartFile> files) {
-        try {
-            // Create multipart request
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            body.add("request", request);
-            
-            // Add files to request
-            for (MultipartFile file : files) {
-                if (file != null && !file.isEmpty()) {
-                    body.add("files", new ByteArrayResource(file.getBytes()) {
-                        @Override
-                        public String getFilename() {
-                            return file.getOriginalFilename();
-                        }
-                    });
-                }
-            }
-            
-            // Set headers for multipart request
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            
-            // Create request entity
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-            
-            // Make the request
-            ResponseEntity<ClaimDocumentResponse> response = restTemplate.postForEntity(
-                baseUrl + "/api/claims", 
-                requestEntity, 
-                ClaimDocumentResponse.class
-            );
-            
-            return response.getBody();
-        } catch (Exception e) {
-            log.error("Failed to upload document with files: {}", e.getMessage());
-            throw new RuntimeException("Failed to upload document with files", e);
-        }
-    }
-    
-    /**
-     * Convert File to MultipartFile
-     */
-    private MultipartFile convertToMultipartFile(File file) {
-        try {
-            return new MultipartFile() {
-                @Override
-                public String getName() {
-                    return "file";
-                }
-                
-                @Override
-                public String getOriginalFilename() {
-                    return file.getName();
-                }
-                
-                @Override
-                public String getContentType() {
-                    return "application/octet-stream";
-                }
-                
-                @Override
-                public boolean isEmpty() {
-                    return file.length() == 0;
-                }
-                
-                @Override
-                public long getSize() {
-                    return file.length();
-                }
-                
-                @Override
-                public byte[] getBytes() throws IOException {
-                    return Files.readAllBytes(file.toPath());
-                }
-                
-                @Override
-                public InputStream getInputStream() throws IOException {
-                    return new FileInputStream(file);
-                }
-                
-                @Override
-                public void transferTo(File dest) throws IOException, IllegalStateException {
-                    if (dest == null) {
-                        throw new IllegalArgumentException("Destination file cannot be null");
-                    }
-                    Files.copy(file.toPath(), dest.toPath());
-                }
-            };
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to convert file to MultipartFile", e);
-        }
-    }
-    
+
     /**
      * Search for documents using the document search endpoint
      * @param searchRequest the search criteria including document class, filters, pagination, and sorting

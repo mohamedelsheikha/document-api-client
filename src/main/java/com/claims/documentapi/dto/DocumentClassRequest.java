@@ -23,5 +23,23 @@ public class DocumentClassRequest {
         private boolean indexed;
         private String validationPattern;
         private String description;
+        private String defaultValue;
+
+        public enum AttributeType {
+            STRING,
+            NUMBER,
+            DATE,
+            BOOLEAN,
+            TEXT, // Long text
+            EMAIL,
+            PHONE,
+            CURRENCY,
+            PERCENTAGE,
+            URL,
+            REFERENCE // Reference to another document
+        }
+
     }
+
+
 }

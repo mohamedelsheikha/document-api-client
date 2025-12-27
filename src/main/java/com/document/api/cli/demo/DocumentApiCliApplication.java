@@ -518,8 +518,7 @@ public class DocumentApiCliApplication {
                             
                             // Get presigned URL for this attachment
                             try {
-                                // Use the document ID directly
-                                String attachmentId = attachment.getDocumentId();
+                                String attachmentId = attachment.getId();
                                 
                                 if (attachmentId != null) {
                                     String downloadUrl = client.getAttachmentDownloadUrl(doc.getId(), attachmentId);

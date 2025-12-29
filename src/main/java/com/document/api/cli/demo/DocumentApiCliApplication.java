@@ -35,38 +35,8 @@ public class DocumentApiCliApplication {
         System.out.println("API URL: " + client.getBaseApiUrl());
         System.out.println();
 
-        runTest();
-
         // Interactive mode
         interactiveMode();
-    }
-
-    private void runTest() {
-        try {
-            // login
-            LoginRequest request = new LoginRequest();
-            request.setUsername("admin");
-            request.setPassword("AdminPass123!");
-
-            LoginResponse response = client.login(request);
-            currentUser = response;
-            client.setAuthToken(response.getToken());
-            System.out.println("Login successful!");
-
-            // upload document
-            String docId = "694f4739e1e581f2dfaab7a8";
-
-            List<File> files = new ArrayList<>();
-            files.add(new File("/home/mohamed/Documents/SampleDocs/sample.pdf"));
-            files.add(new File("/home/mohamed/Documents/SampleDocs/sample.txt"));
-            List<DocumentAttachmentDto> uploadResponse = client.uploadAttachments(docId, files);
-            System.out.println("Attachment(s) uploaded successfully!");
-            System.out.println("Response: " + uploadResponse);
-        } catch(Exception e) {
-            System.out.println("Error while adding an attachment" + e.getMessage());
-            e.printStackTrace();
-        }
-
     }
 
     private void interactiveMode() {

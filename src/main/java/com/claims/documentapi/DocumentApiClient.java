@@ -161,6 +161,25 @@ public class DocumentApiClient {
             throw e;
         }
     }
+
+    public UserResponse getUserByUsername(String username) {
+        try {
+            ResponseEntity<UserResponse> response = exchange("/api/admin/users/username/" + username, HttpMethod.GET, null, UserResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get user by username: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public void deleteUser(String userId) {
+        try {
+            exchange("/api/admin/users/" + userId, HttpMethod.DELETE, null, Void.class);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to delete user: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
     
     // Group endpoints
     public List<GroupResponse> getGroups() {
@@ -170,6 +189,137 @@ public class DocumentApiClient {
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get groups: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public GroupResponse createGroup(GroupRequest request) {
+        try {
+            ResponseEntity<GroupResponse> response = exchange("/api/admin/groups", HttpMethod.POST, request, GroupResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to create group: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public GroupResponse getGroupByName(String name) {
+        try {
+            ResponseEntity<GroupResponse> response = exchange("/api/admin/groups/name/" + name, HttpMethod.GET, null, GroupResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get group by name: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public void deleteGroup(String groupId) {
+        try {
+            exchange("/api/admin/groups/" + groupId, HttpMethod.DELETE, null, Void.class);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to delete group: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    // Privilege set endpoints
+    public List<PrivilegeSetResponse> getPrivilegeSets() {
+        try {
+            ResponseEntity<List<PrivilegeSetResponse>> response = exchange("/api/admin/privilege-sets", HttpMethod.GET, null,
+                new ParameterizedTypeReference<List<PrivilegeSetResponse>>() {});
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get privilege sets: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public PrivilegeSetResponse getPrivilegeSetByName(String name) {
+        try {
+            ResponseEntity<PrivilegeSetResponse> response = exchange("/api/admin/privilege-sets/name/" + name, HttpMethod.GET, null, PrivilegeSetResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get privilege set by name: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public PrivilegeSetResponse createPrivilegeSet(PrivilegeSetRequest request) {
+        try {
+            ResponseEntity<PrivilegeSetResponse> response = exchange("/api/admin/privilege-sets", HttpMethod.POST, request, PrivilegeSetResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to create privilege set: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public PrivilegeSetResponse updatePrivilegeSet(String privilegeSetId, PrivilegeSetRequest request) {
+        try {
+            ResponseEntity<PrivilegeSetResponse> response = exchange("/api/admin/privilege-sets/" + privilegeSetId, HttpMethod.PUT, request, PrivilegeSetResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to update privilege set: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public void deletePrivilegeSet(String privilegeSetId) {
+        try {
+            exchange("/api/admin/privilege-sets/" + privilegeSetId, HttpMethod.DELETE, null, Void.class);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to delete privilege set: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    // ACL endpoints
+    public List<AccessControlListResponse> getAcls() {
+        try {
+            ResponseEntity<List<AccessControlListResponse>> response = exchange("/api/admin/acls", HttpMethod.GET, null,
+                new ParameterizedTypeReference<List<AccessControlListResponse>>() {});
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get ACLs: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public AccessControlListResponse getAclByName(String name) {
+        try {
+            ResponseEntity<AccessControlListResponse> response = exchange("/api/admin/acls/name/" + name, HttpMethod.GET, null, AccessControlListResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get ACL by name: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public AccessControlListResponse createAcl(AccessControlListRequest request) {
+        try {
+            ResponseEntity<AccessControlListResponse> response = exchange("/api/admin/acls", HttpMethod.POST, request, AccessControlListResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to create ACL: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public AccessControlListResponse updateAcl(String aclId, AccessControlListRequest request) {
+        try {
+            ResponseEntity<AccessControlListResponse> response = exchange("/api/admin/acls/" + aclId, HttpMethod.PUT, request, AccessControlListResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to update ACL: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public void deleteAcl(String aclId) {
+        try {
+            exchange("/api/admin/acls/" + aclId, HttpMethod.DELETE, null, Void.class);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to delete ACL: {}", e.getResponseBodyAsString());
             throw e;
         }
     }

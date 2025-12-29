@@ -10,6 +10,7 @@ public class DocumentResponse {
     private String id;
     private String documentClassId;
     private String documentClassName;
+    private String accessControlListId;
     private Map<String, Object> attributes;
     private String createdBy;
     private String modifiedBy;

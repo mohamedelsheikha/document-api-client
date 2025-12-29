@@ -7,7 +7,8 @@ public class GroupResponse {
     private String id;
     private String name;
     private String description;
-    private String privilegeSetId;
-    private String createdBy;
-    private String createdAt;
+    private java.util.List<String> userIds;
+    private java.util.List<String> userNames;
+    private java.time.LocalDateTime createdAt;
+    private java.time.LocalDateTime updatedAt;
 }

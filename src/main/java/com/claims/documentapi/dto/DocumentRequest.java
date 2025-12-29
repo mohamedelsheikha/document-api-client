@@ -7,7 +7,7 @@ import java.util.Map;
 
 @Data
 public class DocumentRequest {
-    private String name;
     private String documentClassId;
+    private String accessControlListId;
     private Map<String, Object> attributes = new HashMap<>();
 }

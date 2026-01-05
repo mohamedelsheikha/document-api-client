@@ -1316,6 +1316,51 @@ public class DocumentApiCliApplication {
             DocumentRequest request = new DocumentRequest();
             request.setDocumentClassId(classId);
 
+            try {
+                List<AccessControlListResponse> acls = client.getAcls();
+                if (acls == null || acls.isEmpty()) {
+                    if (docClass.getAclId() == null || docClass.getAclId().isBlank()) {
+                        System.out.println("No ACLs found. Create an ACL first (per-document ACL may be required).");
+                        return;
+                    }
+                    System.out.println("No ACLs found; proceeding with document class ACL (ID: " + docClass.getAclId() + ")");
+                } else {
+                    System.out.println("\n--- ACLs ---");
+                    if (docClass.getAclId() != null && !docClass.getAclId().isBlank()) {
+                        System.out.println("0. Use document class ACL (ID: " + docClass.getAclId() + ")");
+                    }
+                    for (int i = 0; i < acls.size(); i++) {
+                        AccessControlListResponse acl = acls.get(i);
+                        System.out.println((i + 1) + ". " + acl.getName() + " (ID: " + acl.getId() + ")");
+                    }
+
+                    int minChoice = (docClass.getAclId() != null && !docClass.getAclId().isBlank()) ? 0 : 1;
+                    System.out.print("\nChoose an ACL (enter number): ");
+                    int aclChoice = getIntInput();
+                    if (aclChoice < minChoice || aclChoice > acls.size()) {
+                        System.out.println("Invalid choice!");
+                        return;
+                    }
+
+                    if (aclChoice != 0) {
+                        AccessControlListResponse selectedAcl = acls.get(aclChoice - 1);
+                        request.setAccessControlListId(selectedAcl.getId());
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("Failed to list ACLs for selection: " + e.getMessage());
+                if (docClass.getAclId() == null || docClass.getAclId().isBlank()) {
+                    System.out.print("Enter ACL ID to use for this document (required), or leave blank to cancel: ");
+                    String aclId = scanner.nextLine().trim();
+                    if (aclId.isEmpty()) {
+                        return;
+                    }
+                    request.setAccessControlListId(aclId);
+                } else {
+                    System.out.println("Proceeding with document class ACL (ID: " + docClass.getAclId() + ")");
+                }
+            }
+
             System.out.println("\n--- Document attribute entry ---  ");
             String attrVal;
             for (DocumentClassResponse.AttributeDefinition attrDef : docClass.getAttributes()) {

@@ -2,6 +2,7 @@ package com.claims.documentapi;
 
 import com.claims.documentapi.dto.*;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.FileSystemResource;
@@ -28,6 +29,11 @@ public class DocumentApiClient {
     
     private final RestTemplate restTemplate;
     private String baseUrl;
+    /**
+     * -- SETTER --
+     *  Set authentication token for subsequent requests
+     */
+    @Setter
     private String authToken;
 
     public static final String LOCK_HEADER = "X-Document-Lock-Id";
@@ -35,13 +41,6 @@ public class DocumentApiClient {
     public DocumentApiClient(String baseUrl) {
         this.restTemplate = new RestTemplate();
         this.baseUrl = baseUrl;
-    }
-
-    /**
-     * Set authentication token for subsequent requests
-     */
-    public void setAuthToken(String token) {
-        this.authToken = token;
     }
 
     /**
@@ -119,8 +118,9 @@ public class DocumentApiClient {
     // Document Class endpoints
     public List<DocumentClassResponse> getDocumentClasses() {
         try {
-            ResponseEntity<List<DocumentClassResponse>> response = exchange("/api/admin/document-classes", HttpMethod.GET, null, 
-                new ParameterizedTypeReference<List<DocumentClassResponse>>() {});
+            ResponseEntity<List<DocumentClassResponse>> response = exchange("/api/admin/document-classes", HttpMethod.GET, null,
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get document classes: {}", e.getResponseBodyAsString());
@@ -180,8 +180,9 @@ public class DocumentApiClient {
     // User endpoints
     public List<UserResponse> getUsers() {
         try {
-            ResponseEntity<List<UserResponse>> response = exchange("/api/admin/users", HttpMethod.GET, null, 
-                new ParameterizedTypeReference<List<UserResponse>>() {});
+            ResponseEntity<List<UserResponse>> response = exchange("/api/admin/users", HttpMethod.GET, null,
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get users: {}", e.getResponseBodyAsString());
@@ -211,8 +212,9 @@ public class DocumentApiClient {
     // Group endpoints
     public List<GroupResponse> getGroups() {
         try {
-            ResponseEntity<List<GroupResponse>> response = exchange("/api/admin/groups", HttpMethod.GET, null, 
-                new ParameterizedTypeReference<List<GroupResponse>>() {});
+            ResponseEntity<List<GroupResponse>> response = exchange("/api/admin/groups", HttpMethod.GET, null,
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get groups: {}", e.getResponseBodyAsString());
@@ -253,7 +255,8 @@ public class DocumentApiClient {
     public List<PrivilegeSetResponse> getPrivilegeSets() {
         try {
             ResponseEntity<List<PrivilegeSetResponse>> response = exchange("/api/admin/privilege-sets", HttpMethod.GET, null,
-                new ParameterizedTypeReference<List<PrivilegeSetResponse>>() {});
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get privilege sets: {}", e.getResponseBodyAsString());
@@ -304,7 +307,8 @@ public class DocumentApiClient {
     public List<AccessControlListResponse> getAcls() {
         try {
             ResponseEntity<List<AccessControlListResponse>> response = exchange("/api/admin/acls", HttpMethod.GET, null,
-                new ParameterizedTypeReference<List<AccessControlListResponse>>() {});
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get ACLs: {}", e.getResponseBodyAsString());
@@ -354,8 +358,9 @@ public class DocumentApiClient {
     // Privilege endpoints
     public List<PrivilegeResponse> getPrivileges() {
         try {
-            ResponseEntity<List<PrivilegeResponse>> response = exchange("/api/admin/privileges", HttpMethod.GET, null, 
-                new ParameterizedTypeReference<List<PrivilegeResponse>>() {});
+            ResponseEntity<List<PrivilegeResponse>> response = exchange("/api/admin/privileges", HttpMethod.GET, null,
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get privileges: {}", e.getResponseBodyAsString());
@@ -395,8 +400,9 @@ public class DocumentApiClient {
     // Document endpoints
     public List<DocumentResponse> getDocuments() {
         try {
-            ResponseEntity<List<DocumentResponse>> response = exchange("/api/documents", HttpMethod.GET, null, 
-                new ParameterizedTypeReference<List<DocumentResponse>>() {});
+            ResponseEntity<List<DocumentResponse>> response = exchange("/api/documents", HttpMethod.GET, null,
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to get documents: {}", e.getResponseBodyAsString());
@@ -524,8 +530,9 @@ public class DocumentApiClient {
             ResponseEntity<List<DocumentDto>> response = exchange(
                 "/api/documents/" + documentId + "/attachments", 
                 HttpMethod.GET, 
-                null, 
-                new ParameterizedTypeReference<List<DocumentDto>>() {}
+                null,
+                    new ParameterizedTypeReference<>() {
+                    }
             );
             return response.getBody();
         } catch (HttpClientErrorException e) {
@@ -583,8 +590,9 @@ public class DocumentApiClient {
      */
     public List<DocumentResponse> searchDocuments(DocumentSearchRequest searchRequest) {
         try {
-            ResponseEntity<List<DocumentResponse>> response = exchange("/api/documents/search", HttpMethod.POST, searchRequest, 
-                new ParameterizedTypeReference<List<DocumentResponse>>() {});
+            ResponseEntity<List<DocumentResponse>> response = exchange("/api/documents/search", HttpMethod.POST, searchRequest,
+                    new ParameterizedTypeReference<>() {
+                    });
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to search documents: {}", e.getResponseBodyAsString());

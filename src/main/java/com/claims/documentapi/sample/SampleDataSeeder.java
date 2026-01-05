@@ -113,6 +113,25 @@ public class SampleDataSeeder {
         uploadAttachmentsBestEffort(doc1.getId(), filePaths);
         uploadAttachmentsBestEffort(doc2.getId(), filePaths);
 
+        // Demo: update (lock -> update -> unlock)
+        System.out.println("\n=== Demo: Update (with lease lock) ===");
+        DocumentLockResponse lock = client.lockDocument(doc1.getId(), 900);
+        try {
+            DocumentRequest updateRequest = new DocumentRequest();
+            updateRequest.setDocumentClassId(doc1.getDocumentClassId());
+            updateRequest.setAccessControlListId(doc1.getAccessControlListId());
+            updateRequest.getAttributes().putAll(doc1.getAttributes());
+            updateRequest.getAttributes().put("category", "UPDATED");
+            updateRequest.getAttributes().put("title", PREFIX + "Doc1_UPDATED");
+
+            DocumentResponse updated = client.updateDocument(doc1.getId(), updateRequest, lock.getLockId());
+            System.out.println("Updated document: " + updated.getId() +
+                    " title=" + updated.getAttributes().get("title") +
+                    " category=" + updated.getAttributes().get("category"));
+        } finally {
+            safeRun(() -> client.unlockDocument(doc1.getId(), lock.getLockId()));
+        }
+
         // Demo: search
         System.out.println("\n=== Demo: Search ===");
         List<DocumentResponse> searchResults = client.searchDocuments(
@@ -157,7 +176,14 @@ public class SampleDataSeeder {
             for (DocumentResponse d : documents) {
                 Object title = d.getAttributes() != null ? d.getAttributes().get("title") : null;
                 if (title instanceof String && ((String) title).startsWith(PREFIX)) {
-                    safeRun(() -> client.deleteDocument(d.getId()));
+                    safeRun(() -> {
+                        DocumentLockResponse lock = client.lockDocument(d.getId(), 300);
+                        try {
+                            client.deleteDocument(d.getId(), lock.getLockId());
+                        } finally {
+                            safeRun(() -> client.unlockDocument(d.getId(), lock.getLockId()));
+                        }
+                    });
                     System.out.println("Deleted document: " + d.getId());
                 }
             }
@@ -369,8 +395,13 @@ public class SampleDataSeeder {
             return;
         }
 
-        List<DocumentAttachmentDto> uploaded = client.uploadAttachments(documentId, files);
-        System.out.println("Uploaded " + uploaded.size() + " attachments to document " + documentId);
+        DocumentLockResponse lock = client.lockDocument(documentId, 900);
+        try {
+            List<DocumentAttachmentDto> uploaded = client.uploadAttachments(documentId, files, lock.getLockId());
+            System.out.println("Uploaded " + uploaded.size() + " attachments to document " + documentId);
+        } finally {
+            safeRun(() -> client.unlockDocument(documentId, lock.getLockId()));
+        }
     }
 
     private static <T> List<T> safeList(SupplierWithException<List<T>> supplier) {

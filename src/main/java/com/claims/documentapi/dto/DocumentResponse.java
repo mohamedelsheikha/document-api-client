@@ -12,6 +12,11 @@ public class DocumentResponse {
     private String documentClassName;
     private String accessControlListId;
     private Map<String, Object> attributes;
+
+    private String lockedBy;
+    private String lockId;
+    private LocalDateTime lockExpiresAt;
+
     private String createdBy;
     private String modifiedBy;
     private LocalDateTime createdAt;

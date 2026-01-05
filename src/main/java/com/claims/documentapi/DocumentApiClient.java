@@ -29,6 +29,8 @@ public class DocumentApiClient {
     private final RestTemplate restTemplate;
     private String baseUrl;
     private String authToken;
+
+    public static final String LOCK_HEADER = "X-Document-Lock-Id";
     
     public DocumentApiClient(String baseUrl) {
         this.restTemplate = new RestTemplate();
@@ -50,10 +52,17 @@ public class DocumentApiClient {
     }
     
     private HttpHeaders createHeaders() {
+        return createHeaders(null);
+    }
+
+    private HttpHeaders createHeaders(String lockId) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (authToken != null) {
             headers.setBearerAuth(authToken);
+        }
+        if (lockId != null && !lockId.isBlank()) {
+            headers.set(LOCK_HEADER, lockId);
         }
         return headers;
     }
@@ -62,9 +71,27 @@ public class DocumentApiClient {
         HttpEntity<?> entity = new HttpEntity<>(body, createHeaders());
         return restTemplate.exchange(baseUrl + endpoint, method, entity, responseType);
     }
+
+    private <T> ResponseEntity<T> exchange(String endpoint,
+                                          HttpMethod method,
+                                          Object body,
+                                          ParameterizedTypeReference<T> responseType,
+                                          String lockId) {
+        HttpEntity<?> entity = new HttpEntity<>(body, createHeaders(lockId));
+        return restTemplate.exchange(baseUrl + endpoint, method, entity, responseType);
+    }
     
     private <T> ResponseEntity<T> exchange(String endpoint, HttpMethod method, Object body, Class<T> responseType) {
         HttpEntity<?> entity = new HttpEntity<>(body, createHeaders());
+        return restTemplate.exchange(baseUrl + endpoint, method, entity, responseType);
+    }
+
+    private <T> ResponseEntity<T> exchange(String endpoint,
+                                          HttpMethod method,
+                                          Object body,
+                                          Class<T> responseType,
+                                          String lockId) {
+        HttpEntity<?> entity = new HttpEntity<>(body, createHeaders(lockId));
         return restTemplate.exchange(baseUrl + endpoint, method, entity, responseType);
     }
     
@@ -397,7 +424,55 @@ public class DocumentApiClient {
         }
     }
 
+    public DocumentLockResponse lockDocument(String id, Integer leaseSeconds) {
+        try {
+            DocumentLockRequest request = new DocumentLockRequest();
+            request.setLeaseSeconds(leaseSeconds);
+            ResponseEntity<DocumentLockResponse> response = exchange(
+                    "/api/documents/" + id + "/lock",
+                    HttpMethod.POST,
+                    request,
+                    DocumentLockResponse.class
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to lock document: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public DocumentLockResponse renewLock(String id, String lockId, Integer leaseSeconds) {
+        try {
+            DocumentLockRequest request = new DocumentLockRequest();
+            request.setLeaseSeconds(leaseSeconds);
+            ResponseEntity<DocumentLockResponse> response = exchange(
+                    "/api/documents/" + id + "/lock/renew",
+                    HttpMethod.POST,
+                    request,
+                    DocumentLockResponse.class,
+                    lockId
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to renew lock: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public void unlockDocument(String id, String lockId) {
+        try {
+            exchange("/api/documents/" + id + "/unlock", HttpMethod.POST, null, Void.class, lockId);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to unlock document: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
     public List<DocumentAttachmentDto> uploadAttachments(String id, List<File> files) {
+        return uploadAttachments(id, files, null);
+    }
+
+    public List<DocumentAttachmentDto> uploadAttachments(String id, List<File> files, String lockId) {
         try {
             if (id == null || id.isBlank()) {
                 throw new IllegalArgumentException("Document id cannot be null/blank");
@@ -422,6 +497,9 @@ public class DocumentApiClient {
             headers.setContentType(MediaType.MULTIPART_FORM_DATA);
             if (authToken != null) {
                 headers.setBearerAuth(authToken);
+            }
+            if (lockId != null && !lockId.isBlank()) {
+                headers.set(LOCK_HEADER, lockId);
             }
 
             HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
@@ -472,8 +550,12 @@ public class DocumentApiClient {
     }
     
     public DocumentResponse updateDocument(String id, DocumentRequest request) {
+        return updateDocument(id, request, null);
+    }
+
+    public DocumentResponse updateDocument(String id, DocumentRequest request, String lockId) {
         try {
-            ResponseEntity<DocumentResponse> response = exchange("/api/documents/" + id, HttpMethod.PUT, request, DocumentResponse.class);
+            ResponseEntity<DocumentResponse> response = exchange("/api/documents/" + id, HttpMethod.PUT, request, DocumentResponse.class, lockId);
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to update document: {}", e.getResponseBodyAsString());
@@ -482,8 +564,12 @@ public class DocumentApiClient {
     }
     
     public void deleteDocument(String id) {
+        deleteDocument(id, null);
+    }
+
+    public void deleteDocument(String id, String lockId) {
         try {
-            exchange("/api/documents/" + id, HttpMethod.DELETE, null, Void.class);
+            exchange("/api/documents/" + id, HttpMethod.DELETE, null, Void.class, lockId);
         } catch (HttpClientErrorException e) {
             log.error("Failed to delete document: {}", e.getResponseBodyAsString());
             throw e;

@@ -626,8 +626,16 @@ public class DocumentApiCliApplication {
             System.out.print("Document ID: ");
             String id = scanner.nextLine();
 
-            client.deleteDocument(id);
-            System.out.println("Document deleted successfully!");
+            DocumentLockResponse lock = client.lockDocument(id, 300);
+            try {
+                client.deleteDocument(id, lock.getLockId());
+                System.out.println("Document deleted successfully!");
+            } finally {
+                try {
+                    client.unlockDocument(id, lock.getLockId());
+                } catch (Exception ignored) {
+                }
+            }
 
         } catch (Exception e) {
             System.out.println("Failed to delete document: " + e.getMessage());
@@ -694,20 +702,29 @@ public class DocumentApiCliApplication {
             
             // Upload attachments
             System.out.println("\nUploading " + attachmentFiles.size() + " file(s) to document " + documentId + "...");
+
+            DocumentLockResponse lock = client.lockDocument(documentId, 900);
             
-            if (attachmentFiles.size() == 1) {
-                // Single file upload
-                java.io.File file = attachmentFiles.get(0);
-                List<File> files = new ArrayList<>();
-                files.add(file);
-                List<DocumentAttachmentDto> response = client.uploadAttachments(documentId, files);
-                System.out.println("Attachment uploaded successfully!");
-                System.out.println("Response: " + response);
-            } else {
-                // Multiple files upload
-                List<DocumentAttachmentDto> response = client.uploadAttachments(documentId, attachmentFiles);
-                System.out.println("Multiple attachments uploaded successfully!");
-                System.out.println("Response: " + response);
+            try {
+                if (attachmentFiles.size() == 1) {
+                    // Single file upload
+                    java.io.File file = attachmentFiles.get(0);
+                    List<File> files = new ArrayList<>();
+                    files.add(file);
+                    List<DocumentAttachmentDto> response = client.uploadAttachments(documentId, files, lock.getLockId());
+                    System.out.println("Attachment uploaded successfully!");
+                    System.out.println("Response: " + response);
+                } else {
+                    // Multiple files upload
+                    List<DocumentAttachmentDto> response = client.uploadAttachments(documentId, attachmentFiles, lock.getLockId());
+                    System.out.println("Multiple attachments uploaded successfully!");
+                    System.out.println("Response: " + response);
+                }
+            } finally {
+                try {
+                    client.unlockDocument(documentId, lock.getLockId());
+                } catch (Exception ignored) {
+                }
             }
             
             // Show updated document info

@@ -2,9 +2,11 @@ package com.document.api.cli.demo;
 
 import com.claims.documentapi.DocumentApiClient;
 import com.claims.documentapi.dto.*;
+import lombok.NonNull;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
@@ -18,6 +20,9 @@ public class DocumentApiCliApplication {
     private static final Scanner scanner = new Scanner(System.in);
     private final DocumentApiClient client;
     private LoginResponse currentUser;
+
+    private String lastLockedDocumentId;
+    private String lastLockId;
 
     public static void main(String[] args) {
         String apiUrl = args.length > 0 ? args[0] : "http://localhost:5000/api";
@@ -74,69 +79,33 @@ public class DocumentApiCliApplication {
 
     private void showAdminMenu() {
         System.out.println("\n--- Admin Menu ---");
-        System.out.println("1. List Document Classes");
-        System.out.println("2. Get Single Document Class");
-        System.out.println("3. Create Document Class");
-        System.out.println("4. Modify Document Class");
-        System.out.println("5. List Users");
-        System.out.println("6. List Groups");
-        System.out.println("7. List Privileges");
-        System.out.println("8. Create Privilege");
-        System.out.println("9. Delete Privilege");
-        System.out.println("10. List Documents");
-        System.out.println("11. Create Document");
-        System.out.println("12. Upload attachment to an existing document");
-        System.out.println("13. Search Documents");
-        System.out.println("14. Logout");
-        System.out.println("15. Exit");
+        System.out.println("1. Authentication Management");
+        System.out.println("2. Authorization Management");
+        System.out.println("3. Data Model Management");
+        System.out.println("4. Document Management");
+        System.out.println("5. Logout");
+        System.out.println("6. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
 
         switch (choice) {
             case 1:
-                listDocumentClasses();
+                showAuthenticationManagementMenu();
                 break;
             case 2:
-                getDocumentClassInfo();
+                showAuthorizationManagementMenu();
                 break;
             case 3:
-                createDocumentClass();
+                showDataModelManagementMenu();
                 break;
             case 4:
-                modifyDocumentClass();
+                showDocumentManagementMenu();
                 break;
             case 5:
-                listUsers();
-                break;
-            case 6:
-                listGroups();
-                break;
-            case 7:
-                listPrivileges();
-                break;
-            case 8:
-                createPrivilege();
-                break;
-            case 9:
-                deletePrivilege();
-                break;
-            case 10:
-                listDocuments();
-                break;
-            case 11:
-                createDocument();
-                break;
-            case 12:
-                uploadAttachmentToExistingDocument();
-                break;
-            case 13:
-                searchDocuments();
-                break;
-            case 14:
                 logout();
                 break;
-            case 15:
+            case 6:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -145,11 +114,327 @@ public class DocumentApiCliApplication {
         }
     }
 
+    private void listPrivilegeSets() {
+        try {
+            List<PrivilegeSetResponse> sets = client.getPrivilegeSets();
+            System.out.println("\n--- Privilege Sets (" + (sets != null ? sets.size() : 0) + ") ---");
+            if (sets == null || sets.isEmpty()) {
+                return;
+            }
+            for (PrivilegeSetResponse ps : sets) {
+                System.out.println("ID: " + ps.getId());
+                System.out.println("Name: " + ps.getName());
+                System.out.println("Description: " + ps.getDescription());
+                System.out.println("Privilege IDs: " + ps.getPrivilegeIds());
+                System.out.println("---");
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to list privilege sets: " + e.getMessage());
+        }
+    }
+
+    private void createPrivilegeSet() {
+        try {
+            System.out.print("Name: ");
+            String name = scanner.nextLine();
+            System.out.print("Description: ");
+            String description = scanner.nextLine();
+
+            List<PrivilegeResponse> privileges = client.getPrivileges();
+            if (privileges == null || privileges.isEmpty()) {
+                System.out.println("No privileges found. Create privileges first.");
+                return;
+            }
+
+            System.out.println("\n--- Available Privileges ---");
+            for (PrivilegeResponse p : privileges) {
+                System.out.println("- " + p.getId() + " | " + p.getName());
+            }
+            System.out.print("Enter privilege IDs (comma-separated): ");
+            String ids = scanner.nextLine().trim();
+            List<String> privilegeIds = new ArrayList<>();
+            if (!ids.isEmpty()) {
+                for (String part : ids.split(",")) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        privilegeIds.add(trimmed);
+                    }
+                }
+            }
+            if (privilegeIds.isEmpty()) {
+                System.out.println("Privilege set must include at least one privilege.");
+                return;
+            }
+
+            PrivilegeSetRequest request = new PrivilegeSetRequest();
+            request.setName(name);
+            request.setDescription(description);
+            request.setPrivilegeIds(privilegeIds);
+
+            PrivilegeSetResponse created = client.createPrivilegeSet(request);
+            System.out.println("Privilege set created successfully!");
+            System.out.println("ID: " + created.getId());
+            System.out.println("Name: " + created.getName());
+        } catch (Exception e) {
+            System.out.println("Failed to create privilege set: " + e.getMessage());
+        }
+    }
+
+    private void updatePrivilegeSet() {
+        try {
+            System.out.print("Privilege Set ID: ");
+            String id = scanner.nextLine().trim();
+            System.out.print("New Name (leave empty to keep current): ");
+            String name = scanner.nextLine();
+            System.out.print("New Description (leave empty to keep current): ");
+            String description = scanner.nextLine();
+
+            List<PrivilegeSetResponse> sets = client.getPrivilegeSets();
+            PrivilegeSetResponse current = null;
+            if (sets != null) {
+                for (PrivilegeSetResponse ps : sets) {
+                    if (ps.getId() != null && ps.getId().equals(id)) {
+                        current = ps;
+                        break;
+                    }
+                }
+            }
+            if (current == null) {
+                System.out.println("Privilege set not found in list. Ensure the ID is correct.");
+                return;
+            }
+
+            System.out.println("Current privilege IDs: " + current.getPrivilegeIds());
+            System.out.print("New privilege IDs (comma-separated, leave empty to keep current): ");
+            String ids = scanner.nextLine().trim();
+            List<String> privilegeIds = current.getPrivilegeIds() != null ? new ArrayList<>(current.getPrivilegeIds()) : new ArrayList<>();
+            if (!ids.isEmpty()) {
+                privilegeIds = new ArrayList<>();
+                for (String part : ids.split(",")) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        privilegeIds.add(trimmed);
+                    }
+                }
+            }
+            if (privilegeIds.isEmpty()) {
+                System.out.println("Privilege set must include at least one privilege.");
+                return;
+            }
+
+            PrivilegeSetRequest request = new PrivilegeSetRequest();
+            request.setName(name.isEmpty() ? current.getName() : name);
+            request.setDescription(description.isEmpty() ? current.getDescription() : description);
+            request.setPrivilegeIds(privilegeIds);
+
+            PrivilegeSetResponse updated = client.updatePrivilegeSet(id, request);
+            System.out.println("Privilege set updated successfully!");
+            System.out.println("ID: " + updated.getId());
+            System.out.println("Name: " + updated.getName());
+        } catch (Exception e) {
+            System.out.println("Failed to update privilege set: " + e.getMessage());
+        }
+    }
+
+    private void deletePrivilegeSet() {
+        try {
+            System.out.print("Privilege Set ID: ");
+            String id = scanner.nextLine().trim();
+            client.deletePrivilegeSet(id);
+            System.out.println("Privilege set deleted successfully!");
+        } catch (Exception e) {
+            System.out.println("Failed to delete privilege set: " + e.getMessage());
+        }
+    }
+
+    private void listAcls() {
+        try {
+            List<AccessControlListResponse> acls = client.getAcls();
+            System.out.println("\n--- ACLs (" + (acls != null ? acls.size() : 0) + ") ---");
+            if (acls == null || acls.isEmpty()) {
+                return;
+            }
+            for (AccessControlListResponse acl : acls) {
+                System.out.println("ID: " + acl.getId());
+                System.out.println("Name: " + acl.getName());
+                System.out.println("Description: " + acl.getDescription());
+                System.out.println("Association: " + acl.getAssociation());
+                System.out.println("---");
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to list ACLs: " + e.getMessage());
+        }
+    }
+
+    private void createAcl() {
+        try {
+            System.out.print("Name: ");
+            String name = scanner.nextLine();
+            System.out.print("Description: ");
+            String description = scanner.nextLine();
+
+            List<GroupResponse> groups = client.getGroups();
+            if (groups == null || groups.isEmpty()) {
+                System.out.println("No groups found. Create a group first.");
+                return;
+            }
+
+            List<PrivilegeSetResponse> privilegeSets = client.getPrivilegeSets();
+            if (privilegeSets == null || privilegeSets.isEmpty()) {
+                System.out.println("No privilege sets found. Create a privilege set first.");
+                return;
+            }
+
+            System.out.println("\nACL association maps PRINCIPAL -> PRIVILEGE_SET_ID.");
+            System.out.println("Principals are matched by username and group name.");
+
+            Map<String, String> association = new HashMap<>();
+            while (true) {
+                System.out.println("\n--- Groups ---");
+                for (int i = 0; i < groups.size(); i++) {
+                    GroupResponse g = groups.get(i);
+                    System.out.println((i + 1) + ". " + g.getName() + " (ID: " + g.getId() + ")");
+                }
+                if (!association.isEmpty()) {
+                    System.out.println("0. Finish and create ACL");
+                }
+                System.out.print("Choose a group (enter number): ");
+                int groupChoice = getIntInput();
+                if (!association.isEmpty() && groupChoice == 0) {
+                    break;
+                }
+                if (groupChoice < 1 || groupChoice > groups.size()) {
+                    System.out.println("Invalid choice!");
+                    continue;
+                }
+
+                GroupResponse selectedGroup = groups.get(groupChoice - 1);
+                String principal = selectedGroup.getName() != null ? selectedGroup.getName().trim() : "";
+                if (principal.isEmpty()) {
+                    System.out.println("Selected group has no name; cannot use it as a principal.");
+                    continue;
+                }
+
+                System.out.println("\n--- Privilege Sets ---");
+                for (int i = 0; i < privilegeSets.size(); i++) {
+                    PrivilegeSetResponse ps = privilegeSets.get(i);
+                    System.out.println((i + 1) + ". " + ps.getName() + " (ID: " + ps.getId() + ")");
+                }
+
+                System.out.print("Choose a privilege set (enter number): ");
+                int psChoice = getIntInput();
+                if (psChoice < 1 || psChoice > privilegeSets.size()) {
+                    System.out.println("Invalid choice!");
+                    continue;
+                }
+
+                PrivilegeSetResponse selectedPs = privilegeSets.get(psChoice - 1);
+                String privilegeSetId = selectedPs.getId() != null ? selectedPs.getId().trim() : "";
+                if (privilegeSetId.isEmpty()) {
+                    System.out.println("Selected privilege set has no ID.");
+                    continue;
+                }
+
+                association.put(principal, privilegeSetId);
+                System.out.println("Added association: " + principal + " -> " + privilegeSetId);
+            }
+
+            if (association.isEmpty()) {
+                System.out.println("ACL must include at least one association.");
+                return;
+            }
+
+            AccessControlListRequest request = new AccessControlListRequest();
+            request.setName(name);
+            request.setDescription(description);
+            request.setAssociation(association);
+
+            AccessControlListResponse created = client.createAcl(request);
+            System.out.println("ACL created successfully!");
+            System.out.println("ID: " + created.getId());
+            System.out.println("Name: " + created.getName());
+            System.out.println("Association: " + created.getAssociation());
+        } catch (Exception e) {
+            System.out.println("Failed to create ACL: " + e.getMessage());
+        }
+    }
+
+    private void updateAcl() {
+        try {
+            System.out.print("ACL ID: ");
+            String id = scanner.nextLine().trim();
+
+            List<AccessControlListResponse> acls = client.getAcls();
+            AccessControlListResponse current = null;
+            if (acls != null) {
+                for (AccessControlListResponse acl : acls) {
+                    if (acl.getId() != null && acl.getId().equals(id)) {
+                        current = acl;
+                        break;
+                    }
+                }
+            }
+            if (current == null) {
+                System.out.println("ACL not found in list. Ensure the ID is correct.");
+                return;
+            }
+
+            System.out.print("New Name (leave empty to keep current): ");
+            String name = scanner.nextLine();
+            System.out.print("New Description (leave empty to keep current): ");
+            String description = scanner.nextLine();
+
+            Map<String, String> association = current.getAssociation() != null ? new HashMap<>(current.getAssociation()) : new HashMap<>();
+
+            System.out.println("Current association: " + association);
+            System.out.print("Add/Replace association principal (leave empty to keep current): ");
+            String principal = scanner.nextLine().trim();
+            if (!principal.isEmpty()) {
+                System.out.print("Privilege Set ID for '" + principal + "': ");
+                String privilegeSetId = scanner.nextLine().trim();
+                if (privilegeSetId.isEmpty()) {
+                    System.out.println("PrivilegeSetId cannot be empty.");
+                    return;
+                }
+                association.put(principal, privilegeSetId);
+            }
+
+            if (association.isEmpty()) {
+                System.out.println("ACL must include at least one association.");
+                return;
+            }
+
+            AccessControlListRequest request = new AccessControlListRequest();
+            request.setName(name.isEmpty() ? current.getName() : name);
+            request.setDescription(description.isEmpty() ? current.getDescription() : description);
+            request.setAssociation(association);
+
+            AccessControlListResponse updated = client.updateAcl(id, request);
+            System.out.println("ACL updated successfully!");
+            System.out.println("ID: " + updated.getId());
+            System.out.println("Name: " + updated.getName());
+            System.out.println("Association: " + updated.getAssociation());
+        } catch (Exception e) {
+            System.out.println("Failed to update ACL: " + e.getMessage());
+        }
+    }
+
+    private void deleteAcl() {
+        try {
+            System.out.print("ACL ID: ");
+            String id = scanner.nextLine().trim();
+            client.deleteAcl(id);
+            System.out.println("ACL deleted successfully!");
+        } catch (Exception e) {
+            System.out.println("Failed to delete ACL: " + e.getMessage());
+        }
+    }
+
     private void getDocumentClassInfo() {
         System.out.println("\n--- Document Class Info menu ---");
         System.out.println("1. By ID");
         System.out.println("2. By name");
-        System.out.println("3. Exit");
+        System.out.println("3. Back");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -162,13 +447,243 @@ public class DocumentApiCliApplication {
                 getDocumentClassInfoByName();
                 break;
             case 3:
-                System.out.println("Goodbye!");
-                System.exit(0);
                 break;
             default:
                 System.out.println("Invalid option!");
         }
 
+    }
+
+    private void showAuthenticationManagementMenu() {
+        while (true) {
+            System.out.println("\n--- Authentication Management ---");
+            System.out.println("1. List Users");
+            System.out.println("2. List Groups");
+            System.out.println("3. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    listUsers();
+                    break;
+                case 2:
+                    listGroups();
+                    break;
+                case 3:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
+    }
+
+    private void showAuthorizationManagementMenu() {
+        while (true) {
+            System.out.println("\n--- Authorization Management ---");
+            System.out.println("1. Privileges");
+            System.out.println("2. Privilege Sets");
+            System.out.println("3. ACLs");
+            System.out.println("4. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    showPrivilegesMenu();
+                    break;
+                case 2:
+                    showPrivilegeSetsMenu();
+                    break;
+                case 3:
+                    showAclsMenu();
+                    break;
+                case 4:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
+    }
+
+    private void showPrivilegesMenu() {
+        while (true) {
+            System.out.println("\n--- Privileges ---");
+            System.out.println("1. List Privileges");
+            System.out.println("2. Create Privilege");
+            System.out.println("3. Delete Privilege");
+            System.out.println("4. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    listPrivileges();
+                    break;
+                case 2:
+                    createPrivilege();
+                    break;
+                case 3:
+                    deletePrivilege();
+                    break;
+                case 4:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
+    }
+
+    private void showPrivilegeSetsMenu() {
+        while (true) {
+            System.out.println("\n--- Privilege Sets ---");
+            System.out.println("1. List Privilege Sets");
+            System.out.println("2. Create Privilege Set");
+            System.out.println("3. Update Privilege Set");
+            System.out.println("4. Delete Privilege Set");
+            System.out.println("5. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    listPrivilegeSets();
+                    break;
+                case 2:
+                    createPrivilegeSet();
+                    break;
+                case 3:
+                    updatePrivilegeSet();
+                    break;
+                case 4:
+                    deletePrivilegeSet();
+                    break;
+                case 5:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
+    }
+
+    private void showAclsMenu() {
+        while (true) {
+            System.out.println("\n--- Access Control Lists (ACLs) ---");
+            System.out.println("1. List ACLs");
+            System.out.println("2. Create ACL");
+            System.out.println("3. Update ACL");
+            System.out.println("4. Delete ACL");
+            System.out.println("5. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    listAcls();
+                    break;
+                case 2:
+                    createAcl();
+                    break;
+                case 3:
+                    updateAcl();
+                    break;
+                case 4:
+                    deleteAcl();
+                    break;
+                case 5:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
+    }
+
+    private void showDataModelManagementMenu() {
+        while (true) {
+            System.out.println("\n--- Data Model Management ---");
+            System.out.println("1. List Document Classes");
+            System.out.println("2. Get Single Document Class");
+            System.out.println("3. Create Document Class");
+            System.out.println("4. Modify Document Class");
+            System.out.println("5. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    listDocumentClasses();
+                    break;
+                case 2:
+                    getDocumentClassInfo();
+                    break;
+                case 3:
+                    createDocumentClass();
+                    break;
+                case 4:
+                    modifyDocumentClass();
+                    break;
+                case 5:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
+    }
+
+    private void showDocumentManagementMenu() {
+        while (true) {
+            System.out.println("\n--- Document Management ---");
+            System.out.println("1. List Documents");
+            System.out.println("2. Create Document");
+            System.out.println("3. Delete Document");
+            System.out.println("4. Upload attachment to an existing document");
+            System.out.println("5. Search Documents");
+            System.out.println("6. Lock Document");
+            System.out.println("7. Renew Lock");
+            System.out.println("8. Unlock Document");
+            System.out.println("9. Update Document (requires lock)");
+            System.out.println("10. Guided Lock Demo (lock->renew->update->upload->unlock)");
+            System.out.println("11. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    listDocuments();
+                    break;
+                case 2:
+                    createDocument();
+                    break;
+                case 3:
+                    deleteDocument();
+                    break;
+                case 4:
+                    uploadAttachmentToExistingDocument();
+                    break;
+                case 5:
+                    searchDocuments();
+                    break;
+                case 6:
+                    lockDocument();
+                    break;
+                case 7:
+                    renewLock();
+                    break;
+                case 8:
+                    unlockDocument();
+                    break;
+                case 9:
+                    updateExistingDocument();
+                    break;
+                case 10:
+                    guidedLockDemo();
+                    break;
+                case 11:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
     }
 
     private void getDocumentClassInfoByName() {
@@ -220,41 +735,21 @@ public class DocumentApiCliApplication {
 
     private void showUserMenu() {
         System.out.println("\n--- User Menu ---");
-        System.out.println("1. Create Document");
-        System.out.println("2. Upload attachment to existing document");
-        System.out.println("3. Delete Document");
-        System.out.println("4. Search Documents");
-        System.out.println("5. List My Documents");
-        System.out.println("6. Add Attachment to Document");
-        System.out.println("7. Logout");
-        System.out.println("8. Exit");
+        System.out.println("1. Document Management");
+        System.out.println("2. Logout");
+        System.out.println("3. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
 
         switch (choice) {
             case 1:
-                createDocument();
+                showDocumentManagementMenu();
                 break;
             case 2:
-                uploadAttachmentToExistingDocument();
-                break;
-            case 3:
-                deleteDocument();
-                break;
-            case 4:
-                searchDocuments();
-                break;
-            case 5:
-                listDocuments();
-                break;
-            case 6:
-                addAttachment();
-                break;
-            case 7:
                 logout();
                 break;
-            case 8:
+            case 3:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -291,7 +786,181 @@ public class DocumentApiCliApplication {
     private void logout() {
         client.clearAuth();
         currentUser = null;
+        lastLockedDocumentId = null;
+        lastLockId = null;
         System.out.println("Logged out successfully!");
+    }
+
+    private void lockDocument() {
+        try {
+            String documentId = promptDocumentId();
+            System.out.print("Lease seconds (default 900): ");
+            String leaseInput = scanner.nextLine().trim();
+            Integer leaseSeconds = leaseInput.isEmpty() ? 900 : Integer.parseInt(leaseInput);
+
+            DocumentLockResponse lock = client.lockDocument(documentId, leaseSeconds);
+            lastLockedDocumentId = documentId;
+            lastLockId = lock.getLockId();
+
+            System.out.println("Lock acquired:");
+            System.out.println("- documentId=" + lock.getDocumentId());
+            System.out.println("- lockedBy=" + lock.getLockedBy());
+            System.out.println("- lockId=" + lock.getLockId());
+            System.out.println("- expiresAt=" + lock.getLockExpiresAt());
+        } catch (Exception e) {
+            System.out.println("Failed to lock document: " + e.getMessage());
+        }
+    }
+
+    private void renewLock() {
+        try {
+            String documentId = promptDocumentIdWithDefault(lastLockedDocumentId);
+            String lockId = promptLockIdWithDefault(lastLockId);
+
+            System.out.print("New lease seconds (default 900): ");
+            String leaseInput = scanner.nextLine().trim();
+            Integer leaseSeconds = leaseInput.isEmpty() ? 900 : Integer.parseInt(leaseInput);
+
+            DocumentLockResponse renewed = client.renewLock(documentId, lockId, leaseSeconds);
+            lastLockedDocumentId = documentId;
+            lastLockId = renewed.getLockId();
+
+            System.out.println("Lock renewed:");
+            System.out.println("- documentId=" + renewed.getDocumentId());
+            System.out.println("- lockedBy=" + renewed.getLockedBy());
+            System.out.println("- lockId=" + renewed.getLockId());
+            System.out.println("- expiresAt=" + renewed.getLockExpiresAt());
+        } catch (Exception e) {
+            System.out.println("Failed to renew lock: " + e.getMessage());
+        }
+    }
+
+    private void unlockDocument() {
+        try {
+            String documentId = promptDocumentIdWithDefault(lastLockedDocumentId);
+            String lockId = promptLockIdWithDefault(lastLockId);
+
+            client.unlockDocument(documentId, lockId);
+            System.out.println("Unlocked document: " + documentId);
+
+            if (documentId != null && documentId.equals(lastLockedDocumentId)) {
+                lastLockedDocumentId = null;
+                lastLockId = null;
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to unlock document: " + e.getMessage());
+        }
+    }
+
+    private void updateExistingDocument() {
+        try {
+            String documentId = promptDocumentIdWithDefault(lastLockedDocumentId);
+            String lockId = promptLockIdWithDefault(lastLockId);
+
+            DocumentResponse current = client.getDocument(documentId);
+            System.out.println("Current document:");
+            printDocument(current);
+
+            System.out.print("Attribute key to update: ");
+            String key = scanner.nextLine().trim();
+            if (key.isEmpty()) {
+                System.out.println("No key provided. Update cancelled.");
+                return;
+            }
+            System.out.print("New value: ");
+            String value = scanner.nextLine();
+
+            DocumentRequest request = new DocumentRequest();
+            request.setDocumentClassId(current.getDocumentClassId());
+            request.setAccessControlListId(current.getAccessControlListId());
+            if (current.getAttributes() != null) {
+                request.getAttributes().putAll(current.getAttributes());
+            }
+            request.getAttributes().put(key, value);
+
+            DocumentResponse updated = client.updateDocument(documentId, request, lockId);
+            System.out.println("Updated document:");
+            printDocument(updated);
+        } catch (Exception e) {
+            System.out.println("Failed to update document: " + e.getMessage());
+        }
+    }
+
+    private void guidedLockDemo() {
+        try {
+            String documentId = promptDocumentId();
+            System.out.println("\n--- Step 1: Acquire lock ---");
+            DocumentLockResponse lock = client.lockDocument(documentId, 120);
+            lastLockedDocumentId = documentId;
+            lastLockId = lock.getLockId();
+            System.out.println("LockId=" + lock.getLockId() + " expiresAt=" + lock.getLockExpiresAt());
+
+            System.out.println("\n--- Step 2: Renew lock ---");
+            DocumentLockResponse renewed = client.renewLock(documentId, lock.getLockId(), 300);
+            lastLockId = renewed.getLockId();
+            System.out.println("Renewed expiresAt=" + renewed.getLockExpiresAt());
+
+            System.out.println("\n--- Step 3: Update (requires lock) ---");
+            DocumentResponse current = client.getDocument(documentId);
+            DocumentRequest req = new DocumentRequest();
+            req.setDocumentClassId(current.getDocumentClassId());
+            req.setAccessControlListId(current.getAccessControlListId());
+            if (current.getAttributes() != null) {
+                req.getAttributes().putAll(current.getAttributes());
+            }
+            req.getAttributes().put("demoUpdatedAt", String.valueOf(System.currentTimeMillis()));
+            DocumentResponse updated = client.updateDocument(documentId, req, renewed.getLockId());
+            System.out.println("Updated attribute demoUpdatedAt=" + updated.getAttributes().get("demoUpdatedAt"));
+
+            System.out.println("\n--- Step 4: Upload attachment (requires lock) ---");
+            System.out.print("Enter file path to upload (or empty to skip): ");
+            String filePath = scanner.nextLine().trim();
+            if (!filePath.isEmpty()) {
+                File file = new File(filePath);
+                if (!file.exists() || !file.isFile()) {
+                    System.out.println("File not found, skipping upload: " + filePath);
+                } else {
+                    List<File> files = new ArrayList<>();
+                    files.add(file);
+                    List<DocumentAttachmentDto> uploaded = client.uploadAttachments(documentId, files, renewed.getLockId());
+                    System.out.println("Uploaded attachments: " + uploaded.size());
+                }
+            } else {
+                System.out.println("Skipping upload.");
+            }
+
+            System.out.println("\n--- Step 5: Unlock ---");
+            client.unlockDocument(documentId, renewed.getLockId());
+            lastLockedDocumentId = null;
+            lastLockId = null;
+            System.out.println("Unlocked.");
+        } catch (Exception e) {
+            System.out.println("Guided demo failed: " + e.getMessage());
+        }
+    }
+
+    private String promptDocumentId() {
+        System.out.print("Document ID: ");
+        return scanner.nextLine().trim();
+    }
+
+    private String promptDocumentIdWithDefault(String defaultId) {
+        if (defaultId != null && !defaultId.isBlank()) {
+            System.out.print("Document ID (default " + defaultId + "): ");
+            String input = scanner.nextLine().trim();
+            return input.isEmpty() ? defaultId : input;
+        }
+        return promptDocumentId();
+    }
+
+    private String promptLockIdWithDefault(String defaultLockId) {
+        if (defaultLockId != null && !defaultLockId.isBlank()) {
+            System.out.print("Lock ID (default " + defaultLockId + "): ");
+            String input = scanner.nextLine().trim();
+            return input.isEmpty() ? defaultLockId : input;
+        }
+        System.out.print("Lock ID: ");
+        return scanner.nextLine().trim();
     }
 
     private void listDocumentClasses() {
@@ -382,31 +1051,36 @@ public class DocumentApiCliApplication {
             System.out.print("New Description (leave empty to keep current): ");
             String description = scanner.nextLine();
 
-            DocumentClassRequest request = new DocumentClassRequest();
-            request.setName(current.getName());
-            request.setDisplayName(displayName.isEmpty() ? current.getDisplayName() : displayName);
-            request.setDescription(description.isEmpty() ? current.getDescription() : description);
-
-            // copy response attributes into request attributes
-            List<DocumentClassRequest.AttributeDefinition> attributeDefinitions = new ArrayList<>();
-            for (DocumentClassResponse.AttributeDefinition currentAttr : current.getAttributes()) {
-                DocumentClassRequest.AttributeDefinition requestAttr = new DocumentClassRequest.AttributeDefinition();
-                requestAttr.setName(currentAttr.getId());
-                requestAttr.setType(currentAttr.getType());
-                requestAttr.setIndexed(currentAttr.isIndexed());
-                requestAttr.setRequired((currentAttr.isRequired()));
-                requestAttr.setLength(currentAttr.getLength());
-                requestAttr.setMultiValue(currentAttr.isMultiValue());
-                attributeDefinitions.add(requestAttr);
-            }
-            request.setAttributes(attributeDefinitions);
+            DocumentClassRequest request = getDocumentClassRequest(current, displayName, description);
 
             DocumentClassResponse response = client.updateDocumentClass(id, request);
-            System.out.println("Document class updated successfully!");
+            System.out.println("Document class updated successfully: " + response.getName());
 
         } catch (Exception e) {
             System.out.println("Failed to modify document class: " + e.getMessage());
         }
+    }
+
+    private static @NonNull DocumentClassRequest getDocumentClassRequest(DocumentClassResponse current, String displayName, String description) {
+        DocumentClassRequest request = new DocumentClassRequest();
+        request.setName(current.getName());
+        request.setDisplayName(displayName.isEmpty() ? current.getDisplayName() : displayName);
+        request.setDescription(description.isEmpty() ? current.getDescription() : description);
+
+        // copy response attributes into request attributes
+        List<DocumentClassRequest.AttributeDefinition> attributeDefinitions = new ArrayList<>();
+        for (DocumentClassResponse.AttributeDefinition currentAttr : current.getAttributes()) {
+            DocumentClassRequest.AttributeDefinition requestAttr = new DocumentClassRequest.AttributeDefinition();
+            requestAttr.setName(currentAttr.getId());
+            requestAttr.setType(currentAttr.getType());
+            requestAttr.setIndexed(currentAttr.isIndexed());
+            requestAttr.setRequired((currentAttr.isRequired()));
+            requestAttr.setLength(currentAttr.getLength());
+            requestAttr.setMultiValue(currentAttr.isMultiValue());
+            attributeDefinitions.add(requestAttr);
+        }
+        request.setAttributes(attributeDefinitions);
+        return request;
     }
 
     private void listUsers() {
@@ -501,8 +1175,28 @@ public class DocumentApiCliApplication {
 
     private void listDocuments() {
         try {
-            List<DocumentResponse> documents = client.getDocuments();
-            System.out.println("\n--- Documents (" + documents.size() + ") ---");
+            List<DocumentClassResponse> classes = client.getDocumentClasses();
+            if (classes == null || classes.isEmpty()) {
+                System.out.println("No document classes found.");
+                return;
+            }
+
+            System.out.println("\n--- Document Classes ---");
+            for (int i = 0; i < classes.size(); i++) {
+                DocumentClassResponse dc = classes.get(i);
+                System.out.println((i + 1) + ". " + dc.getName() + " (ID: " + dc.getId() + ")");
+            }
+
+            System.out.print("\nChoose a document class (enter number): ");
+            int classChoice = getIntInput();
+            if (classChoice < 1 || classChoice > classes.size()) {
+                System.out.println("Invalid choice!");
+                return;
+            }
+
+            DocumentClassResponse selectedClass = classes.get(classChoice - 1);
+            List<DocumentResponse> documents = client.searchDocuments(selectedClass.getId(), Map.of());
+            System.out.println("\n--- Documents for class '" + selectedClass.getName() + "' (" + documents.size() + ") ---");
 
             for (DocumentResponse doc : documents) {
                 printDocument(doc);
@@ -594,10 +1288,29 @@ public class DocumentApiCliApplication {
     
     private void createGenericDocument() {
         try {
-            System.out.print("Document Class ID: ");
-            String classId = scanner.nextLine();
+            List<DocumentClassResponse> classes = client.getDocumentClasses();
+            if (classes == null || classes.isEmpty()) {
+                System.out.println("No document classes found. Create a document class first.");
+                return;
+            }
 
-            // find document class by id
+            System.out.println("\n--- Document Classes ---");
+            for (int i = 0; i < classes.size(); i++) {
+                DocumentClassResponse dc = classes.get(i);
+                System.out.println((i + 1) + ". " + dc.getName() + " (ID: " + dc.getId() + ")");
+            }
+
+            System.out.print("\nChoose a document class (enter number): ");
+            int classChoice = getIntInput();
+            if (classChoice < 1 || classChoice > classes.size()) {
+                System.out.println("Invalid choice!");
+                return;
+            }
+
+            DocumentClassResponse selectedClass = classes.get(classChoice - 1);
+            String classId = selectedClass.getId();
+
+            // find document class by id (ensures we have full attribute metadata)
             DocumentClassResponse docClass = client.getDocumentClassById(classId);
 
             DocumentRequest request = new DocumentRequest();

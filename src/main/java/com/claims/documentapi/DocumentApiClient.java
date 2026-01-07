@@ -12,6 +12,8 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -39,7 +41,7 @@ public class DocumentApiClient {
     public static final String LOCK_HEADER = "X-Document-Lock-Id";
     
     public DocumentApiClient(String baseUrl) {
-        this.restTemplate = new RestTemplate();
+        this.restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory());
         this.baseUrl = baseUrl;
     }
 
@@ -205,6 +207,22 @@ public class DocumentApiClient {
             exchange("/api/admin/users/" + userId, HttpMethod.DELETE, null, Void.class);
         } catch (HttpClientErrorException e) {
             log.error("Failed to delete user: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public UserResponse updateUserPrivilegeSet(String userId, String privilegeSetId) {
+        try {
+            String endpoint = UriComponentsBuilder
+                    .fromPath("/api/admin/users/{userId}/privilege-set")
+                    .queryParam("privilegeSetId", privilegeSetId)
+                    .buildAndExpand(userId)
+                    .toUriString();
+
+            ResponseEntity<UserResponse> response = exchange(endpoint, HttpMethod.PATCH, null, UserResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to update user privilege set: {}", e.getResponseBodyAsString());
             throw e;
         }
     }

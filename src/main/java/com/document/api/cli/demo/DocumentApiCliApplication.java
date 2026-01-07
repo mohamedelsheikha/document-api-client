@@ -459,7 +459,8 @@ public class DocumentApiCliApplication {
             System.out.println("\n--- Authentication Management ---");
             System.out.println("1. List Users");
             System.out.println("2. List Groups");
-            System.out.println("3. Back");
+            System.out.println("3. Update User Privilege Set");
+            System.out.println("4. Back");
             System.out.print("Choose option: ");
 
             int choice = getIntInput();
@@ -471,10 +472,65 @@ public class DocumentApiCliApplication {
                     listGroups();
                     break;
                 case 3:
+                    updateUserPrivilegeSet();
+                    break;
+                case 4:
                     return;
                 default:
                     System.out.println("Invalid option!");
             }
+        }
+    }
+
+    private void updateUserPrivilegeSet() {
+        try {
+            List<UserResponse> users = client.getUsers();
+            if (users == null || users.isEmpty()) {
+                System.out.println("No users found.");
+                return;
+            }
+
+            List<PrivilegeSetResponse> privilegeSets = client.getPrivilegeSets();
+            if (privilegeSets == null || privilegeSets.isEmpty()) {
+                System.out.println("No privilege sets found.");
+                return;
+            }
+
+            System.out.println("\n--- Users ---");
+            for (int i = 0; i < users.size(); i++) {
+                UserResponse u = users.get(i);
+                System.out.println((i + 1) + ". " + u.getUsername() + " (ID: " + u.getId() + ") | Privilege Set: " + u.getPrivilegeSetName() + " (" + u.getPrivilegeSetId() + ")");
+            }
+
+            System.out.print("\nChoose a user (enter number): ");
+            int userChoice = getIntInput();
+            if (userChoice < 1 || userChoice > users.size()) {
+                System.out.println("Invalid choice!");
+                return;
+            }
+            UserResponse selectedUser = users.get(userChoice - 1);
+
+            System.out.println("\n--- Privilege Sets ---");
+            for (int i = 0; i < privilegeSets.size(); i++) {
+                PrivilegeSetResponse ps = privilegeSets.get(i);
+                System.out.println((i + 1) + ". " + ps.getName() + " (ID: " + ps.getId() + ")");
+            }
+
+            System.out.print("\nChoose a privilege set (enter number): ");
+            int psChoice = getIntInput();
+            if (psChoice < 1 || psChoice > privilegeSets.size()) {
+                System.out.println("Invalid choice!");
+                return;
+            }
+            PrivilegeSetResponse selectedPs = privilegeSets.get(psChoice - 1);
+
+            UserResponse updated = client.updateUserPrivilegeSet(selectedUser.getId(), selectedPs.getId());
+            System.out.println("User privilege set updated successfully!");
+            System.out.println("Username: " + updated.getUsername());
+            System.out.println("Privilege Set ID: " + updated.getPrivilegeSetId());
+            System.out.println("Privilege Set Name: " + updated.getPrivilegeSetName());
+        } catch (Exception e) {
+            System.out.println("Failed to update user privilege set: " + e.getMessage());
         }
     }
 

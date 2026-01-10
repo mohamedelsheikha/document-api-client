@@ -3,13 +3,18 @@ package com.claims.documentapi.sample;
 import com.claims.documentapi.DocumentApiClient;
 import com.claims.documentapi.dto.*;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.io.File;
+import java.io.RandomAccessFile;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class SampleDataSeeder {
 
     private static final String PREFIX = "SAMPLE_";
+    private static final String DEFAULT_USER_PASSWORD = "UserPass123!";
 
     private final DocumentApiClient client;
 
@@ -27,7 +32,7 @@ public class SampleDataSeeder {
             ? Arrays.asList(Arrays.copyOfRange(args, 3, args.length))
             : List.of(
                 "/home/mohamed/Documents/SampleDocs/sample.pdf",
-                "/home/mohamed/Documents/SampleDocs/sample2.pdf"
+                "/home/mohamed/Documents/SampleDocs/sample.txt"
             );
 
         SampleDataSeeder seeder = new SampleDataSeeder(baseUrl);
@@ -39,13 +44,10 @@ public class SampleDataSeeder {
 
         cleanupSampleData();
 
-        // Privileges are global; privilege sets reference privilege IDs
-        Map<String, String> privilegeNameToId = loadPrivilegeNameToId();
-
         PrivilegeSetResponse readOnly = ensurePrivilegeSet(
             PREFIX + "ReadOnly",
             "Seeded read-only privilege set (search + download)",
-            privilegeIds(privilegeNameToId, "LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "DOWNLOAD_DOCUMENT")
+            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "DOWNLOAD_DOCUMENT")
         );
         System.out.println("Created PrivilegeSet: " + readOnly.getName());
 
@@ -53,16 +55,21 @@ public class SampleDataSeeder {
         PrivilegeSetResponse readWrite = ensurePrivilegeSet(
             PREFIX + "ReadWrite",
             "Seeded read-write privilege set (create + upload + search + download)",
-            privilegeIds(privilegeNameToId, "LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "CREATE_CLAIM", "UPLOAD_DOCUMENT", "DOWNLOAD_DOCUMENT")
+            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "CREATE_DOCUMENT", "UPDATE_CLAIM", "UPLOAD_DOCUMENT", "DOWNLOAD_DOCUMENT")
         );
         System.out.println("Created PrivilegeSet: " + readWrite.getName());
 
         // Create 4 users (via /api/auth/register)
         List<LoginResponse> users = new ArrayList<>();
-        users.add(registerUser(PREFIX + "user1", PREFIX.toLowerCase() + "user1@example.com", "UserPass123!", readOnly.getName()));
-        users.add(registerUser(PREFIX + "user2", PREFIX.toLowerCase() + "user2@example.com", "UserPass123!", readOnly.getName()));
-        users.add(registerUser(PREFIX + "user3", PREFIX.toLowerCase() + "user3@example.com", "UserPass123!", readWrite.getName()));
-        users.add(registerUser(PREFIX + "user4", PREFIX.toLowerCase() + "user4@example.com", "UserPass123!", readWrite.getName()));
+        List<SeededUser> seededUsers = new ArrayList<>();
+        users.add(registerUser(PREFIX + "user1", PREFIX.toLowerCase() + "user1@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+        seededUsers.add(new SeededUser(PREFIX + "user1", DEFAULT_USER_PASSWORD));
+        users.add(registerUser(PREFIX + "user2", PREFIX.toLowerCase() + "user2@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+        seededUsers.add(new SeededUser(PREFIX + "user2", DEFAULT_USER_PASSWORD));
+        users.add(registerUser(PREFIX + "user3", PREFIX.toLowerCase() + "user3@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+        seededUsers.add(new SeededUser(PREFIX + "user3", DEFAULT_USER_PASSWORD));
+        users.add(registerUser(PREFIX + "user4", PREFIX.toLowerCase() + "user4@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+        seededUsers.add(new SeededUser(PREFIX + "user4", DEFAULT_USER_PASSWORD));
 
         List<String> userIds = users.stream().map(LoginResponse::getUserId).toList();
 
@@ -76,13 +83,22 @@ public class SampleDataSeeder {
         AccessControlListResponse aclA = ensureAcl(
             PREFIX + "ACL_A",
             "Seeded ACL A",
-            Map.of(groupA.getId(), readWrite.getId())
+            Map.of(groupA.getName(), readWrite.getId())
         );
 
         AccessControlListResponse aclB = ensureAcl(
             PREFIX + "ACL_B",
             "Seeded ACL B",
-            Map.of(groupB.getId(), readOnly.getId())
+            Map.of(groupB.getName(), readWrite.getId())
+        );
+
+        AccessControlListResponse aclClassLevel = ensureAcl(
+            PREFIX + "ACL_CLASSLEVEL",
+            "Seeded ACL for class-level document classes (GroupA + GroupB)",
+            new HashMap<>() {{
+                put(groupA.getName(), readWrite.getId());
+                put(groupB.getName(), readWrite.getId());
+            }}
         );
 
         // Create 2 sample document classes
@@ -90,8 +106,8 @@ public class SampleDataSeeder {
             PREFIX + "ClassA",
             "Sample Class A",
             "Seeded class A",
-            null,
-            false,
+            aclClassLevel.getId(),
+            true,
             List.of(requiredStringAttr("title", "Title"), requiredStringAttr("category", "Category"))
         );
 
@@ -104,10 +120,15 @@ public class SampleDataSeeder {
             List.of(requiredStringAttr("title", "Title"), requiredStringAttr("department", "Department"))
         );
 
-        // Create documents and assign ACLs per document
+        // Create documents (ClassA = class-level ACL; ClassB = per-document ACL)
         DocumentResponse doc1 = createSampleDocument(classA.getId(), aclA.getId(), Map.of("title", PREFIX + "Doc1", "category", "A"));
+        System.out.println("Created ClassA document (class-level ACL applied): " + doc1.getId() + " acl=" + doc1.getAccessControlListId());
+
         DocumentResponse doc2 = createSampleDocument(classA.getId(), aclB.getId(), Map.of("title", PREFIX + "Doc2", "category", "B"));
+        System.out.println("Created ClassA document (class-level ACL applied): " + doc2.getId() + " acl=" + doc2.getAccessControlListId());
+
         DocumentResponse doc3 = createSampleDocument(classB.getId(), aclA.getId(), Map.of("title", PREFIX + "Doc3", "department", "HR"));
+        System.out.println("Created ClassB document (per-document ACL): " + doc3.getId() + " acl=" + doc3.getAccessControlListId());
 
         // Upload attachments (best-effort; skip missing files)
         uploadAttachmentsBestEffort(doc1.getId(), filePaths);
@@ -154,6 +175,56 @@ public class SampleDataSeeder {
             System.out.println("No attachments found for doc1=" + doc1.getId() + ".");
         }
 
+        System.out.println("\n=== Demo: Per-user document operations ===");
+        client.clearAuth();
+        for (SeededUser user : seededUsers) {
+            loginAsUser(user.username(), user.password());
+
+            String userAclId = (user.username().endsWith("user1") || user.username().endsWith("user3"))
+                ? aclA.getId()
+                : aclB.getId();
+
+            try {
+                DocumentResponse createdClassLevel = createSampleDocument(
+                    classA.getId(),
+                    userAclId,
+                    Map.of("title", PREFIX + user.username() + "_ClassLevel_Doc", "category", "USER")
+                );
+                System.out.println("User " + user.username() + " created ClassA doc: " + createdClassLevel.getId() + " acl=" + createdClassLevel.getAccessControlListId());
+
+                DocumentResponse createdPerDoc = createSampleDocument(
+                    classB.getId(),
+                    userAclId,
+                    Map.of("title", PREFIX + user.username() + "_PerDoc_Doc", "department", "USER")
+                );
+                System.out.println("User " + user.username() + " created ClassB doc: " + createdPerDoc.getId() + " acl=" + createdPerDoc.getAccessControlListId());
+
+                List<DocumentResponse> visibleDocs = client.getDocuments();
+                System.out.println("User " + user.username() + " can see documents: " + (visibleDocs != null ? visibleDocs.size() : 0));
+
+                DocumentResponse viewed = client.getDocument(createdPerDoc.getId());
+                System.out.println("User " + user.username() + " viewed document: " + viewed.getId() + " title=" + viewed.getAttributes().get("title"));
+
+                DocumentLockResponse userLock = client.lockDocument(createdPerDoc.getId(), 900);
+                try {
+                    DocumentRequest updateRequest = new DocumentRequest();
+                    updateRequest.setDocumentClassId(createdPerDoc.getDocumentClassId());
+                    updateRequest.setAccessControlListId(createdPerDoc.getAccessControlListId());
+                    updateRequest.getAttributes().putAll(createdPerDoc.getAttributes());
+                    updateRequest.getAttributes().put("title", PREFIX + user.username() + "_PerDoc_Doc_UPDATED");
+
+                    DocumentResponse updated = client.updateDocument(createdPerDoc.getId(), updateRequest, userLock.getLockId());
+                    System.out.println("User " + user.username() + " updated document: " + updated.getId() + " title=" + updated.getAttributes().get("title"));
+                } finally {
+                    safeRun(() -> client.unlockDocument(createdPerDoc.getId(), userLock.getLockId()));
+                }
+            } catch (Exception e) {
+                System.out.println("User " + user.username() + " document flow failed: " + e.getMessage());
+            } finally {
+                client.clearAuth();
+            }
+        }
+
         System.out.println("\n=== Sample data seeding completed ===");
     }
 
@@ -165,6 +236,16 @@ public class SampleDataSeeder {
         LoginResponse response = client.login(request);
         client.setAuthToken(response.getToken());
         System.out.println("Logged in as admin: " + response.getUsername());
+    }
+
+    private void loginAsUser(String username, String password) {
+        LoginRequest request = new LoginRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+
+        LoginResponse response = client.login(request);
+        client.setAuthToken(response.getToken());
+        System.out.println("Logged in as user: " + response.getUsername());
     }
 
     private void cleanupSampleData() {
@@ -246,27 +327,6 @@ public class SampleDataSeeder {
                 }
             }
         }
-    }
-
-    private Map<String, String> loadPrivilegeNameToId() {
-        List<PrivilegeResponse> privileges = client.getPrivileges();
-        if (privileges == null) {
-            return Map.of();
-        }
-        return privileges.stream()
-            .filter(p -> p.getName() != null && p.getId() != null)
-            .collect(Collectors.toMap(PrivilegeResponse::getName, PrivilegeResponse::getId, (a, b) -> a));
-    }
-
-    private List<String> privilegeIds(Map<String, String> nameToId, String... names) {
-        List<String> ids = new ArrayList<>();
-        for (String n : names) {
-            String id = nameToId.get(n);
-            if (id != null) {
-                ids.add(id);
-            }
-        }
-        return ids;
     }
 
     private PrivilegeSetResponse ensurePrivilegeSet(String name, String description, List<String> privilegeIds) {
@@ -397,10 +457,88 @@ public class SampleDataSeeder {
 
         DocumentLockResponse lock = client.lockDocument(documentId, 900);
         try {
-            List<DocumentAttachmentDto> uploaded = client.uploadAttachments(documentId, files, lock.getLockId());
-            System.out.println("Uploaded " + uploaded.size() + " attachments to document " + documentId);
+            for (File file : files) {
+                uploadAttachmentMultipartBestEffort(documentId, file, lock.getLockId());
+            }
         } finally {
             safeRun(() -> client.unlockDocument(documentId, lock.getLockId()));
+        }
+    }
+
+    private void uploadAttachmentMultipartBestEffort(String documentId, File file, String lockId) {
+        if (file == null || !file.exists() || !file.isFile()) {
+            return;
+        }
+
+        try {
+            String contentType = "application/octet-stream";
+
+            MultipartUploadInitRequest initRequest = new MultipartUploadInitRequest();
+            initRequest.setFileName(file.getName());
+            initRequest.setContentType(contentType);
+            initRequest.setFileSize(file.length());
+
+            MultipartUploadInitResponse initResponse = client.initMultipartUpload(documentId, initRequest, lockId);
+            String sessionId = initResponse.getSessionId();
+
+            int partSizeBytes = initResponse.getPartSizeBytes() != null ? initResponse.getPartSizeBytes() : 10 * 1024 * 1024;
+            long totalSize = file.length();
+            int totalParts = (int) Math.ceil((double) totalSize / (double) partSizeBytes);
+            if (totalParts <= 0) {
+                System.out.println("Invalid file size for multipart upload: " + file);
+                return;
+            }
+
+            HttpClient httpClient = HttpClient.newHttpClient();
+            List<MultipartCompletedPart> completedParts = new ArrayList<>();
+
+            try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+                byte[] buffer = new byte[partSizeBytes];
+                for (int partNumber = 1; partNumber <= totalParts; partNumber++) {
+                    long offset = (long) (partNumber - 1) * partSizeBytes;
+                    raf.seek(offset);
+                    int read = raf.read(buffer);
+                    if (read <= 0) {
+                        break;
+                    }
+
+                    byte[] partBytes = read == buffer.length ? buffer : java.util.Arrays.copyOf(buffer, read);
+                    MultipartPresignPartResponse presign = client.presignMultipartUploadPart(documentId, sessionId, partNumber);
+
+                    HttpRequest putRequest = HttpRequest.newBuilder()
+                            .uri(URI.create(presign.getPresignedUrl()))
+                            .PUT(HttpRequest.BodyPublishers.ofByteArray(partBytes))
+                            .build();
+
+                    HttpResponse<Void> putResponse = httpClient.send(putRequest, HttpResponse.BodyHandlers.discarding());
+                    if (putResponse.statusCode() < 200 || putResponse.statusCode() >= 300) {
+                        throw new RuntimeException("Part upload failed. status=" + putResponse.statusCode() + ", part=" + partNumber);
+                    }
+
+                    String etag = putResponse.headers().firstValue("ETag")
+                            .orElse(putResponse.headers().firstValue("Etag").orElse(null));
+                    if (etag == null || etag.isBlank()) {
+                        throw new RuntimeException("Missing ETag for part " + partNumber);
+                    }
+
+                    MultipartCompletedPart completedPart = new MultipartCompletedPart();
+                    completedPart.setPartNumber(partNumber);
+                    completedPart.setETag(etag);
+                    completedParts.add(completedPart);
+                }
+            }
+
+            if (completedParts.isEmpty()) {
+                throw new RuntimeException("No parts uploaded.");
+            }
+
+            MultipartUploadCompleteRequest completeRequest = new MultipartUploadCompleteRequest();
+            completeRequest.setParts(completedParts);
+
+            MultipartUploadCompleteResponse completeResponse = client.completeMultipartUpload(documentId, sessionId, completeRequest, lockId);
+            System.out.println("Uploaded attachment via multipart: doc=" + documentId + " file=" + file.getName() + " attachmentId=" + completeResponse.getAttachmentId());
+        } catch (Exception e) {
+            System.out.println("Multipart upload failed for file " + file.getName() + ": " + e.getMessage());
         }
     }
 
@@ -418,6 +556,8 @@ public class SampleDataSeeder {
         } catch (Exception ignored) {
         }
     }
+
+    private record SeededUser(String username, String password) {}
 
     @FunctionalInterface
     private interface SupplierWithException<T> {

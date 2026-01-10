@@ -5,6 +5,12 @@ import com.claims.documentapi.dto.*;
 import lombok.NonNull;
 
 import java.io.File;
+import java.io.RandomAccessFile;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -125,7 +131,7 @@ public class DocumentApiCliApplication {
                 System.out.println("ID: " + ps.getId());
                 System.out.println("Name: " + ps.getName());
                 System.out.println("Description: " + ps.getDescription());
-                System.out.println("Privilege IDs: " + ps.getPrivilegeIds());
+                System.out.println("Privileges: " + ps.getPrivilegeIds());
                 System.out.println("---");
             }
         } catch (Exception e) {
@@ -150,7 +156,7 @@ public class DocumentApiCliApplication {
             for (PrivilegeResponse p : privileges) {
                 System.out.println("- " + p.getId() + " | " + p.getName());
             }
-            System.out.print("Enter privilege IDs (comma-separated): ");
+            System.out.print("Enter privilege NAMES (comma-separated): ");
             String ids = scanner.nextLine().trim();
             List<String> privilegeIds = new ArrayList<>();
             if (!ids.isEmpty()) {
@@ -204,8 +210,8 @@ public class DocumentApiCliApplication {
                 return;
             }
 
-            System.out.println("Current privilege IDs: " + current.getPrivilegeIds());
-            System.out.print("New privilege IDs (comma-separated, leave empty to keep current): ");
+            System.out.println("Current privileges: " + current.getPrivilegeIds());
+            System.out.print("New privilege NAMES (comma-separated, leave empty to keep current): ");
             String ids = scanner.nextLine().trim();
             List<String> privilegeIds = current.getPrivilegeIds() != null ? new ArrayList<>(current.getPrivilegeIds()) : new ArrayList<>();
             if (!ids.isEmpty()) {
@@ -693,13 +699,14 @@ public class DocumentApiCliApplication {
             System.out.println("2. Create Document");
             System.out.println("3. Delete Document");
             System.out.println("4. Upload attachment to an existing document");
-            System.out.println("5. Search Documents");
-            System.out.println("6. Lock Document");
-            System.out.println("7. Renew Lock");
-            System.out.println("8. Unlock Document");
-            System.out.println("9. Update Document (requires lock)");
-            System.out.println("10. Guided Lock Demo (lock->renew->update->upload->unlock)");
-            System.out.println("11. Back");
+            System.out.println("5. Multipart Upload Attachment (direct to S3)");
+            System.out.println("6. Search Documents");
+            System.out.println("7. Lock Document");
+            System.out.println("8. Renew Lock");
+            System.out.println("9. Unlock Document");
+            System.out.println("10. Update Document (requires lock)");
+            System.out.println("11. Guided Lock Demo (lock->renew->update->upload->unlock)");
+            System.out.println("12. Back");
             System.out.print("Choose option: ");
 
             int choice = getIntInput();
@@ -717,27 +724,160 @@ public class DocumentApiCliApplication {
                     uploadAttachmentToExistingDocument();
                     break;
                 case 5:
-                    searchDocuments();
+                    multipartUploadAttachmentDemo();
                     break;
                 case 6:
-                    lockDocument();
+                    searchDocuments();
                     break;
                 case 7:
-                    renewLock();
+                    lockDocument();
                     break;
                 case 8:
-                    unlockDocument();
+                    renewLock();
                     break;
                 case 9:
-                    updateExistingDocument();
+                    unlockDocument();
                     break;
                 case 10:
-                    guidedLockDemo();
+                    updateExistingDocument();
                     break;
                 case 11:
+                    guidedLockDemo();
+                    break;
+                case 12:
                     return;
                 default:
                     System.out.println("Invalid option!");
+            }
+        }
+    }
+
+    private void multipartUploadAttachmentDemo() {
+        DocumentLockResponse lock = null;
+        String sessionId = null;
+        String documentId = null;
+        try {
+            System.out.print("Document ID: ");
+            documentId = scanner.nextLine().trim();
+            if (documentId.isEmpty()) {
+                System.out.println("Document ID cannot be empty.");
+                return;
+            }
+
+            System.out.print("Local file path: ");
+            String filePath = scanner.nextLine().trim();
+            if (filePath.isEmpty()) {
+                System.out.println("File path cannot be empty.");
+                return;
+            }
+
+            File file = new File(filePath);
+            if (!file.exists() || !file.isFile()) {
+                System.out.println("File not found: " + file.getAbsolutePath());
+                return;
+            }
+
+            lock = client.lockDocument(documentId, 900);
+
+            String contentType;
+            try {
+                contentType = Files.probeContentType(file.toPath());
+            } catch (Exception ignored) {
+                contentType = null;
+            }
+            if (contentType == null || contentType.isBlank()) {
+                contentType = "application/octet-stream";
+            }
+
+            MultipartUploadInitRequest initRequest = new MultipartUploadInitRequest();
+            initRequest.setFileName(file.getName());
+            initRequest.setContentType(contentType);
+            initRequest.setFileSize(file.length());
+
+            MultipartUploadInitResponse initResponse = client.initMultipartUpload(documentId, initRequest, lock.getLockId());
+            sessionId = initResponse.getSessionId();
+
+            int partSizeBytes = initResponse.getPartSizeBytes() != null ? initResponse.getPartSizeBytes() : 10 * 1024 * 1024;
+            long totalSize = file.length();
+            int totalParts = (int) Math.ceil((double) totalSize / (double) partSizeBytes);
+            if (totalParts <= 0) {
+                System.out.println("Invalid file size.");
+                return;
+            }
+
+            HttpClient httpClient = HttpClient.newHttpClient();
+            List<MultipartCompletedPart> completedParts = new ArrayList<>();
+
+            try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
+                byte[] buffer = new byte[partSizeBytes];
+                for (int partNumber = 1; partNumber <= totalParts; partNumber++) {
+                    long offset = (long) (partNumber - 1) * partSizeBytes;
+                    raf.seek(offset);
+                    int read = raf.read(buffer);
+                    if (read <= 0) {
+                        break;
+                    }
+
+                    byte[] partBytes = read == buffer.length ? buffer : java.util.Arrays.copyOf(buffer, read);
+                    MultipartPresignPartResponse presign = client.presignMultipartUploadPart(documentId, sessionId, partNumber);
+
+                    HttpRequest putRequest = HttpRequest.newBuilder()
+                            .uri(URI.create(presign.getPresignedUrl()))
+                            .PUT(HttpRequest.BodyPublishers.ofByteArray(partBytes))
+                            .build();
+
+                    HttpResponse<Void> putResponse = httpClient.send(putRequest, HttpResponse.BodyHandlers.discarding());
+                    if (putResponse.statusCode() < 200 || putResponse.statusCode() >= 300) {
+                        throw new RuntimeException("Part upload failed. status=" + putResponse.statusCode() + ", part=" + partNumber);
+                    }
+
+                    String etag = putResponse.headers().firstValue("ETag")
+                            .orElse(putResponse.headers().firstValue("Etag").orElse(null));
+                    if (etag == null || etag.isBlank()) {
+                        throw new RuntimeException("Missing ETag for part " + partNumber);
+                    }
+
+                    MultipartCompletedPart completedPart = new MultipartCompletedPart();
+                    completedPart.setPartNumber(partNumber);
+                    completedPart.setETag(etag);
+                    completedParts.add(completedPart);
+
+                    System.out.println("Uploaded part " + partNumber + "/" + totalParts + " (" + read + " bytes)");
+                }
+            }
+
+            if (completedParts.isEmpty()) {
+                throw new RuntimeException("No parts uploaded.");
+            }
+
+            MultipartUploadCompleteRequest completeRequest = new MultipartUploadCompleteRequest();
+            completeRequest.setParts(completedParts);
+
+            MultipartUploadCompleteResponse completeResponse = client.completeMultipartUpload(documentId, sessionId, completeRequest, lock.getLockId());
+            System.out.println("Multipart upload completed!");
+            System.out.println("Attachment ID: " + completeResponse.getAttachmentId());
+
+            try {
+                String downloadUrl = client.getAttachmentDownloadUrl(documentId, completeResponse.getAttachmentId());
+                System.out.println("Download URL: " + downloadUrl);
+            } catch (Exception e) {
+                System.out.println("Failed to get download URL: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Multipart upload failed: " + e.getMessage());
+            if (documentId != null && sessionId != null && lock != null) {
+                try {
+                    client.abortMultipartUpload(documentId, sessionId, lock.getLockId());
+                    System.out.println("Multipart session aborted.");
+                } catch (Exception ignored) {
+                }
+            }
+        } finally {
+            if (documentId != null && lock != null) {
+                try {
+                    client.unlockDocument(documentId, lock.getLockId());
+                } catch (Exception ignored) {
+                }
             }
         }
     }

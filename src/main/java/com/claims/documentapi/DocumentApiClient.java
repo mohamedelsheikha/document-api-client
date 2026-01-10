@@ -558,6 +558,92 @@ public class DocumentApiClient {
             throw e;
         }
     }
+
+    public MultipartUploadInitResponse initMultipartUpload(String documentId, MultipartUploadInitRequest request, String lockId) {
+        try {
+            ResponseEntity<MultipartUploadInitResponse> response = exchange(
+                    "/api/documents/" + documentId + "/attachments/multipart",
+                    HttpMethod.POST,
+                    request,
+                    MultipartUploadInitResponse.class,
+                    lockId
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to init multipart upload: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public MultipartUploadStatusResponse getMultipartUploadStatus(String documentId, String sessionId) {
+        try {
+            ResponseEntity<MultipartUploadStatusResponse> response = exchange(
+                    "/api/documents/" + documentId + "/attachments/multipart/" + sessionId,
+                    HttpMethod.GET,
+                    null,
+                    MultipartUploadStatusResponse.class
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get multipart upload status: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public MultipartPresignPartResponse presignMultipartUploadPart(String documentId, String sessionId, int partNumber) {
+        try {
+            String endpoint = UriComponentsBuilder
+                    .fromPath("/api/documents/{documentId}/attachments/multipart/{sessionId}/presign-part")
+                    .queryParam("partNumber", partNumber)
+                    .buildAndExpand(documentId, sessionId)
+                    .toUriString();
+
+            ResponseEntity<MultipartPresignPartResponse> response = exchange(
+                    endpoint,
+                    HttpMethod.POST,
+                    null,
+                    MultipartPresignPartResponse.class
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to presign multipart upload part: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public MultipartUploadCompleteResponse completeMultipartUpload(String documentId,
+                                                                   String sessionId,
+                                                                   MultipartUploadCompleteRequest request,
+                                                                   String lockId) {
+        try {
+            ResponseEntity<MultipartUploadCompleteResponse> response = exchange(
+                    "/api/documents/" + documentId + "/attachments/multipart/" + sessionId + "/complete",
+                    HttpMethod.POST,
+                    request,
+                    MultipartUploadCompleteResponse.class,
+                    lockId
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to complete multipart upload: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public void abortMultipartUpload(String documentId, String sessionId, String lockId) {
+        try {
+            exchange(
+                    "/api/documents/" + documentId + "/attachments/multipart/" + sessionId + "/abort",
+                    HttpMethod.POST,
+                    null,
+                    Void.class,
+                    lockId
+            );
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to abort multipart upload: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
     
     public String getAttachmentDownloadUrl(String documentId, String attachmentId) {
         try {

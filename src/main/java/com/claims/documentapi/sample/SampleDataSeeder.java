@@ -47,7 +47,7 @@ public class SampleDataSeeder {
         PrivilegeSetResponse readOnly = ensurePrivilegeSet(
             PREFIX + "ReadOnly",
             "Seeded read-only privilege set (search + download)",
-            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "DOWNLOAD_DOCUMENT")
+            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "DOWNLOAD_DOCUMENT", "VIEW_DOCUMENT_CLASSES")
         );
         System.out.println("Created PrivilegeSet: " + readOnly.getName());
 
@@ -55,7 +55,8 @@ public class SampleDataSeeder {
         PrivilegeSetResponse readWrite = ensurePrivilegeSet(
             PREFIX + "ReadWrite",
             "Seeded read-write privilege set (create + upload + search + download)",
-            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "CREATE_DOCUMENT", "UPDATE_CLAIM", "UPLOAD_DOCUMENT", "DOWNLOAD_DOCUMENT")
+            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "CREATE_DOCUMENT", "UPDATE_CLAIM", "UPLOAD_DOCUMENT",
+                    "DOWNLOAD_DOCUMENT", "VIEW_DOCUMENT_CLASSES")
         );
         System.out.println("Created PrivilegeSet: " + readWrite.getName());
 

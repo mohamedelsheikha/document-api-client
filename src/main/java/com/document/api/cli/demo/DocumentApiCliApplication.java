@@ -821,8 +821,11 @@ public class DocumentApiCliApplication {
                     byte[] partBytes = read == buffer.length ? buffer : java.util.Arrays.copyOf(buffer, read);
                     MultipartPresignPartResponse presign = client.presignMultipartUploadPart(documentId, sessionId, partNumber);
 
+                    URI presignedUrl = URI.create(presign.getPresignedUrl());
+                    System.out.println("Uploading to presigned URL: " + presignedUrl);
+
                     HttpRequest putRequest = HttpRequest.newBuilder()
-                            .uri(URI.create(presign.getPresignedUrl()))
+                            .uri(presignedUrl)
                             .PUT(HttpRequest.BodyPublishers.ofByteArray(partBytes))
                             .build();
 

@@ -473,10 +473,11 @@ public class DocumentApiCliApplication {
             System.out.println("\n--- Authentication Management ---");
             System.out.println("1. List Users");
             System.out.println("2. List Groups");
-            System.out.println("3. Create Group");
-            System.out.println("4. Add Users To Group");
-            System.out.println("5. Update User Privilege Set");
-            System.out.println("6. Back");
+            System.out.println("3. Add User");
+            System.out.println("4. Create Group");
+            System.out.println("5. Add Users To Group");
+            System.out.println("6. Update User Privilege Set");
+            System.out.println("7. Back");
             System.out.print("Choose option: ");
 
             int choice = getIntInput();
@@ -488,19 +489,78 @@ public class DocumentApiCliApplication {
                     listGroups();
                     break;
                 case 3:
-                    createGroup();
+                    addUser();
                     break;
                 case 4:
-                    addUsersToGroup();
+                    createGroup();
                     break;
                 case 5:
-                    updateUserPrivilegeSet();
+                    addUsersToGroup();
                     break;
                 case 6:
+                    updateUserPrivilegeSet();
+                    break;
+                case 7:
                     return;
                 default:
                     System.out.println("Invalid option!");
             }
+        }
+    }
+
+    private void addUser() {
+        try {
+            System.out.print("Username: ");
+            String username = scanner.nextLine().trim();
+            if (username.isEmpty()) {
+                System.out.println("Username is required.");
+                return;
+            }
+            System.out.print("Email: ");
+            String email = scanner.nextLine().trim();
+            if (email.isEmpty()) {
+                System.out.println("Email is required.");
+                return;
+            }
+            System.out.print("Password: ");
+            String password = scanner.nextLine();
+            if (password == null || password.isEmpty()) {
+                System.out.println("Password is required.");
+                return;
+            }
+
+            List<PrivilegeSetResponse> privilegeSets = client.getPrivilegeSets();
+            if (privilegeSets == null || privilegeSets.isEmpty()) {
+                System.out.println("No privilege sets found. Create privilege sets first.");
+                return;
+            }
+
+            System.out.println("\n--- Privilege Sets ---");
+            for (int i = 0; i < privilegeSets.size(); i++) {
+                PrivilegeSetResponse ps = privilegeSets.get(i);
+                System.out.println((i + 1) + ". " + ps.getName() + " (ID: " + ps.getId() + ")");
+            }
+            System.out.print("Choose a privilege set (enter number): ");
+            int psChoice = getIntInput();
+            if (psChoice < 1 || psChoice > privilegeSets.size()) {
+                System.out.println("Invalid choice!");
+                return;
+            }
+            PrivilegeSetResponse selectedPs = privilegeSets.get(psChoice - 1);
+
+            AdminCreateUserRequest request = new AdminCreateUserRequest();
+            request.setUsername(username);
+            request.setEmail(email);
+            request.setPassword(password);
+            request.setPrivilegeSetId(selectedPs.getId());
+
+            UserResponse created = client.createUser(request);
+            System.out.println("User created successfully!");
+            System.out.println("ID: " + created.getId());
+            System.out.println("Username: " + created.getUsername());
+            System.out.println("Privilege Set: " + created.getPrivilegeSetName() + " (" + created.getPrivilegeSetId() + ")");
+        } catch (Exception e) {
+            System.out.println("Failed to add user: " + e.getMessage());
         }
     }
 

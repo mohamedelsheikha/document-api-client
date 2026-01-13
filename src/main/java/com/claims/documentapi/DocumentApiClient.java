@@ -290,6 +290,16 @@ public class DocumentApiClient {
         }
     }
 
+    public UserResponse createUser(AdminCreateUserRequest request) {
+        try {
+            ResponseEntity<UserResponse> response = exchange("/api/admin/users", HttpMethod.POST, request, UserResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to create user: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
     public UserResponse getUserByUsername(String username) {
         try {
             ResponseEntity<UserResponse> response = exchange("/api/admin/users/username/" + username, HttpMethod.GET, null, UserResponse.class);
@@ -513,7 +523,16 @@ public class DocumentApiClient {
             throw e;
         }
     }
-    
+
+    public void deletePrivilege(String id) {
+        try {
+            exchange("/api/admin/privileges/" + id, HttpMethod.DELETE, null, Void.class);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to delete privilege: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
     // Document endpoints
     public List<DocumentResponse> getDocuments() {
         try {

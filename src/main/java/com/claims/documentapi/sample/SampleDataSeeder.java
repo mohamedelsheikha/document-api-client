@@ -13,7 +13,7 @@ import java.util.*;
 
 public class SampleDataSeeder {
 
-    private static final String PREFIX = "SAMPLE_";
+    private static String PREFIX = "SAMPLE_";
     private static final String DEFAULT_USER_PASSWORD = "UserPass123!";
 
     private final DocumentApiClient client;
@@ -40,224 +40,237 @@ public class SampleDataSeeder {
     }
 
     public void run(String adminUsername, String adminPassword, List<String> filePaths) {
-        loginAsAdmin(adminUsername, adminPassword);
+        for (String tenant : List.of("claims", "underwriting")) {
+            PREFIX = "SAMPLE_" + tenant.toUpperCase() + "_";
 
-        cleanupSampleData();
+            loginAsAdmin(tenant, adminUsername, adminPassword);
 
-        PrivilegeSetResponse readOnly = ensurePrivilegeSet(
-            PREFIX + "ReadOnly",
-            "Seeded read-only privilege set (search + download)",
-            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "DOWNLOAD_DOCUMENT", "VIEW_DOCUMENT_CLASSES")
-        );
-        System.out.println("Created PrivilegeSet: " + readOnly.getName());
+            cleanupSampleData();
+
+            PrivilegeSetResponse readOnly = ensurePrivilegeSet(
+                    PREFIX + "ReadOnly",
+                    "Seeded read-only privilege set (search + download)",
+                    List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "DOWNLOAD_DOCUMENT", "VIEW_DOCUMENT_CLASSES")
+            );
+            System.out.println("Created PrivilegeSet: " + readOnly.getName());
 
 
-        PrivilegeSetResponse readWrite = ensurePrivilegeSet(
-            PREFIX + "ReadWrite",
-            "Seeded read-write privilege set (create + upload + search + download)",
-            List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "CREATE_DOCUMENT", "UPDATE_CLAIM", "UPLOAD_DOCUMENT",
-                    "DOWNLOAD_DOCUMENT", "VIEW_DOCUMENT_CLASSES")
-        );
-        System.out.println("Created PrivilegeSet: " + readWrite.getName());
+            PrivilegeSetResponse readWrite = ensurePrivilegeSet(
+                    PREFIX + "ReadWrite",
+                    "Seeded read-write privilege set (create + upload + search + download)",
+                    List.of("LOGIN", "SEARCH_CLAIMS", "READ_CLAIM", "CREATE_DOCUMENT", "UPDATE_CLAIM", "UPLOAD_DOCUMENT",
+                            "DOWNLOAD_DOCUMENT", "VIEW_DOCUMENT_CLASSES")
+            );
+            System.out.println("Created PrivilegeSet: " + readWrite.getName());
 
-        // Create 4 users (via /api/auth/register)
-        List<LoginResponse> users = new ArrayList<>();
-        List<SeededUser> seededUsers = new ArrayList<>();
-        users.add(registerUser(PREFIX + "user1", PREFIX.toLowerCase() + "user1@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
-        seededUsers.add(new SeededUser(PREFIX + "user1", DEFAULT_USER_PASSWORD));
-        users.add(registerUser(PREFIX + "user2", PREFIX.toLowerCase() + "user2@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
-        seededUsers.add(new SeededUser(PREFIX + "user2", DEFAULT_USER_PASSWORD));
-        users.add(registerUser(PREFIX + "user3", PREFIX.toLowerCase() + "user3@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
-        seededUsers.add(new SeededUser(PREFIX + "user3", DEFAULT_USER_PASSWORD));
-        users.add(registerUser(PREFIX + "user4", PREFIX.toLowerCase() + "user4@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
-        seededUsers.add(new SeededUser(PREFIX + "user4", DEFAULT_USER_PASSWORD));
+            // Create 4 users (via /api/auth/register)
+            List<LoginResponse> users = new ArrayList<>();
+            List<SeededUser> seededUsers = new ArrayList<>();
+            users.add(registerUser(tenant, PREFIX + "user1", PREFIX.toLowerCase() + "user1@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+            seededUsers.add(new SeededUser(PREFIX + "user1", DEFAULT_USER_PASSWORD));
+            users.add(registerUser(tenant, PREFIX + "user2", PREFIX.toLowerCase() + "user2@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+            seededUsers.add(new SeededUser(PREFIX + "user2", DEFAULT_USER_PASSWORD));
+            users.add(registerUser(tenant, PREFIX + "user3", PREFIX.toLowerCase() + "user3@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+            seededUsers.add(new SeededUser(PREFIX + "user3", DEFAULT_USER_PASSWORD));
+            users.add(registerUser(tenant, PREFIX + "user4", PREFIX.toLowerCase() + "user4@example.com", DEFAULT_USER_PASSWORD, readWrite.getName()));
+            seededUsers.add(new SeededUser(PREFIX + "user4", DEFAULT_USER_PASSWORD));
 
-        List<String> userIds = users.stream().map(LoginResponse::getUserId).toList();
+            List<String> userIds = users.stream().map(LoginResponse::getUserId).toList();
 
-        // Create 2 groups
-        GroupResponse groupA = ensureGroup(PREFIX + "GroupA", "Seeded group A", List.of(userIds.get(0), userIds.get(2)));
-        System.out.println("Create group: " + groupA.getName());
-        GroupResponse groupB = ensureGroup(PREFIX + "GroupB", "Seeded group B", List.of(userIds.get(1), userIds.get(3)));
-        System.out.println("Create group: " + groupB.getName());
+            // Create 2 groups
+            GroupResponse groupA = ensureGroup(PREFIX + "GroupA", "Seeded group A", List.of(userIds.get(0), userIds.get(2)));
+            System.out.println("Create group: " + groupA.getName());
+            GroupResponse groupB = ensureGroup(PREFIX + "GroupB", "Seeded group B", List.of(userIds.get(1), userIds.get(3)));
+            System.out.println("Create group: " + groupB.getName());
 
-        // Create 2 ACLs
-        AccessControlListResponse aclA = ensureAcl(
-            PREFIX + "ACL_A",
-            "Seeded ACL A",
-            Map.of(groupA.getName(), readWrite.getId())
-        );
+            // Create 2 ACLs
+            AccessControlListResponse aclA = ensureAcl(
+                    PREFIX + "ACL_A",
+                    "Seeded ACL A",
+                    Map.of(groupA.getName(), readWrite.getId())
+            );
 
-        AccessControlListResponse aclB = ensureAcl(
-            PREFIX + "ACL_B",
-            "Seeded ACL B",
-            Map.of(groupB.getName(), readWrite.getId())
-        );
+            AccessControlListResponse aclB = ensureAcl(
+                    PREFIX + "ACL_B",
+                    "Seeded ACL B",
+                    Map.of(groupB.getName(), readWrite.getId())
+            );
 
-        AccessControlListResponse aclClassLevel = ensureAcl(
-            PREFIX + "ACL_CLASSLEVEL",
-            "Seeded ACL for class-level document classes (GroupA + GroupB)",
-            new HashMap<>() {{
-                put(groupA.getName(), readWrite.getId());
-                put(groupB.getName(), readWrite.getId());
-            }}
-        );
+            AccessControlListResponse aclClassLevel = ensureAcl(
+                    PREFIX + "ACL_CLASSLEVEL",
+                    "Seeded ACL for class-level document classes (GroupA + GroupB)",
+                    new HashMap<>() {{
+                        put(groupA.getName(), readWrite.getId());
+                        put(groupB.getName(), readWrite.getId());
+                    }}
+            );
 
-        // Create 2 sample document classes
-        DocumentClassResponse classA = ensureDocumentClass(
-            PREFIX + "ClassA",
-            "Sample Class A",
-            "Seeded class A",
-            aclClassLevel.getId(),
-            true,
-            List.of(requiredStringAttr("title", "Title"), requiredStringAttr("category", "Category"))
-        );
+            // Create 2 sample document classes
+            DocumentClassResponse classA = ensureDocumentClass(
+                    PREFIX + "ClassA",
+                    "Sample Class A",
+                    "Seeded class A",
+                    aclClassLevel.getId(),
+                    true,
+                    List.of(requiredStringAttr("title", "Title"), requiredStringAttr("category", "Category"))
+            );
 
-        DocumentClassResponse classB = ensureDocumentClass(
-            PREFIX + "ClassB",
-            "Sample Class B",
-            "Seeded class B",
-            null,
-            false,
-            List.of(requiredStringAttr("title", "Title"), requiredStringAttr("department", "Department"))
-        );
+            DocumentClassResponse classB = ensureDocumentClass(
+                    PREFIX + "ClassB",
+                    "Sample Class B",
+                    "Seeded class B",
+                    null,
+                    false,
+                    List.of(requiredStringAttr("title", "Title"), requiredStringAttr("department", "Department"))
+            );
 
-        // Create documents (ClassA = class-level ACL; ClassB = per-document ACL)
-        DocumentResponse doc1 = createSampleDocument(classA.getId(), aclA.getId(), Map.of("title", PREFIX + "Doc1", "category", "A"));
-        System.out.println("Created ClassA document (class-level ACL applied): " + doc1.getId() + " acl=" + doc1.getAccessControlListId());
+            // Create documents (ClassA = class-level ACL; ClassB = per-document ACL)
+            DocumentResponse doc1 = createSampleDocument(classA.getId(), aclA.getId(), Map.of("title", PREFIX + "Doc1", "category", "A"));
+            System.out.println("Created ClassA document (class-level ACL applied): " + doc1.getId() + " acl=" + doc1.getAccessControlListId());
 
-        DocumentResponse doc2 = createSampleDocument(classA.getId(), aclB.getId(), Map.of("title", PREFIX + "Doc2", "category", "B"));
-        System.out.println("Created ClassA document (class-level ACL applied): " + doc2.getId() + " acl=" + doc2.getAccessControlListId());
+            DocumentResponse doc2 = createSampleDocument(classA.getId(), aclB.getId(), Map.of("title", PREFIX + "Doc2", "category", "B"));
+            System.out.println("Created ClassA document (class-level ACL applied): " + doc2.getId() + " acl=" + doc2.getAccessControlListId());
 
-        DocumentResponse doc3 = createSampleDocument(classB.getId(), aclA.getId(), Map.of("title", PREFIX + "Doc3", "department", "HR"));
-        System.out.println("Created ClassB document (per-document ACL): " + doc3.getId() + " acl=" + doc3.getAccessControlListId());
+            DocumentResponse doc3 = createSampleDocument(classB.getId(), aclA.getId(), Map.of("title", PREFIX + "Doc3", "department", "HR"));
+            System.out.println("Created ClassB document (per-document ACL): " + doc3.getId() + " acl=" + doc3.getAccessControlListId());
 
-        // Upload attachments (best-effort; skip missing files)
-        uploadAttachmentsBestEffort(doc1.getId(), filePaths);
-        uploadAttachmentsBestEffort(doc2.getId(), filePaths);
+            // Upload attachments (best-effort; skip missing files)
+            uploadAttachmentsBestEffort(doc1.getId(), filePaths);
+            uploadAttachmentsBestEffort(doc2.getId(), filePaths);
 
-        // Demo: update (lock -> update -> unlock)
-        System.out.println("\n=== Demo: Update (with lease lock) ===");
-        DocumentLockResponse lock = client.lockDocument(doc1.getId(), 900);
-        try {
-            DocumentRequest updateRequest = new DocumentRequest();
-            updateRequest.setDocumentClassId(doc1.getDocumentClassId());
-            updateRequest.setAccessControlListId(doc1.getAccessControlListId());
-            updateRequest.getAttributes().putAll(doc1.getAttributes());
-            updateRequest.getAttributes().put("category", "UPDATED");
-            updateRequest.getAttributes().put("title", PREFIX + "Doc1_UPDATED");
-
-            DocumentResponse updated = client.updateDocument(doc1.getId(), updateRequest, lock.getLockId());
-            System.out.println("Updated document: " + updated.getId() +
-                    " title=" + updated.getAttributes().get("title") +
-                    " category=" + updated.getAttributes().get("category"));
-        } finally {
-            safeRun(() -> client.unlockDocument(doc1.getId(), lock.getLockId()));
-        }
-
-        // Demo: search
-        System.out.println("\n=== Demo: Search ===");
-        List<DocumentResponse> searchResults = client.searchDocuments(
-            classA.getId(),
-            Map.of("title", PREFIX + "Doc")
-        );
-        System.out.println("Search results (ClassA, title contains '" + PREFIX + "Doc'): " + searchResults.size());
-        for (DocumentResponse d : searchResults) {
-            System.out.println("- " + d.getId() + " title=" + d.getAttributes().get("title") + " acl=" + d.getAccessControlListId());
-        }
-
-        // Demo: download attachment presigned URL
-        System.out.println("\n=== Demo: Download Attachment URL ===");
-        List<DocumentDto> attachments = client.getDocumentAttachments(doc1.getId());
-        if (attachments != null && !attachments.isEmpty()) {
-            DocumentDto first = attachments.get(0);
-            String url = client.getAttachmentDownloadUrl(doc1.getId(), first.getId());
-            System.out.println("Download URL for attachment id=" + first.getId() + ":\n" + url);
-        } else {
-            System.out.println("No attachments found for doc1=" + doc1.getId() + ".");
-        }
-
-        System.out.println("\n=== Demo: Per-user document operations ===");
-        client.clearAuth();
-        for (SeededUser user : seededUsers) {
-            loginAsUser(user.username(), user.password());
-
-            String userAclId = (user.username().endsWith("user1") || user.username().endsWith("user3"))
-                ? aclA.getId()
-                : aclB.getId();
-
+            // Demo: update (lock -> update -> unlock)
+            System.out.println("\n=== Demo: Update (with lease lock) ===");
+            DocumentLockResponse lock = client.lockDocument(doc1.getId(), 900);
             try {
-                DocumentResponse createdClassLevel = createSampleDocument(
-                    classA.getId(),
-                    userAclId,
-                    Map.of("title", PREFIX + user.username() + "_ClassLevel_Doc", "category", "USER")
-                );
-                System.out.println("User " + user.username() + " created ClassA doc: " + createdClassLevel.getId() + " acl=" + createdClassLevel.getAccessControlListId());
+                DocumentRequest updateRequest = new DocumentRequest();
+                updateRequest.setDocumentClassId(doc1.getDocumentClassId());
+                updateRequest.setAccessControlListId(doc1.getAccessControlListId());
+                updateRequest.getAttributes().putAll(doc1.getAttributes());
+                updateRequest.getAttributes().put("category", "UPDATED");
+                updateRequest.getAttributes().put("title", PREFIX + "Doc1_UPDATED");
 
-                DocumentResponse createdPerDoc = createSampleDocument(
-                    classB.getId(),
-                    userAclId,
-                    Map.of("title", PREFIX + user.username() + "_PerDoc_Doc", "department", "USER")
-                );
-                System.out.println("User " + user.username() + " created ClassB doc: " + createdPerDoc.getId() + " acl=" + createdPerDoc.getAccessControlListId());
-
-                List<DocumentResponse> visibleDocs = client.getDocuments();
-                System.out.println("User " + user.username() + " can see documents: " + (visibleDocs != null ? visibleDocs.size() : 0));
-
-                DocumentResponse viewed = client.getDocument(createdPerDoc.getId());
-                System.out.println("User " + user.username() + " viewed document: " + viewed.getId() + " title=" + viewed.getAttributes().get("title"));
-
-                DocumentLockResponse userLock = client.lockDocument(createdPerDoc.getId(), 900);
-                try {
-                    DocumentRequest updateRequest = new DocumentRequest();
-                    updateRequest.setDocumentClassId(createdPerDoc.getDocumentClassId());
-                    updateRequest.setAccessControlListId(createdPerDoc.getAccessControlListId());
-                    updateRequest.getAttributes().putAll(createdPerDoc.getAttributes());
-                    updateRequest.getAttributes().put("title", PREFIX + user.username() + "_PerDoc_Doc_UPDATED");
-
-                    DocumentResponse updated = client.updateDocument(createdPerDoc.getId(), updateRequest, userLock.getLockId());
-                    System.out.println("User " + user.username() + " updated document: " + updated.getId() + " title=" + updated.getAttributes().get("title"));
-                } finally {
-                    safeRun(() -> client.unlockDocument(createdPerDoc.getId(), userLock.getLockId()));
-                }
-            } catch (Exception e) {
-                System.out.println("User " + user.username() + " document flow failed: " + e.getMessage());
+                DocumentResponse updated = client.updateDocument(doc1.getId(), updateRequest, lock.getLockId());
+                System.out.println("Updated document: " + updated.getId() +
+                        " title=" + updated.getAttributes().get("title") +
+                        " category=" + updated.getAttributes().get("category"));
             } finally {
-                client.clearAuth();
+                safeRun(() -> client.unlockDocument(doc1.getId(), lock.getLockId()));
             }
-        }
 
-        System.out.println("\n=== Sample data seeding completed ===");
+            // Demo: search
+            System.out.println("\n=== Demo: Search ===");
+            List<DocumentResponse> searchResults = client.searchDocuments(
+                    classA.getId(),
+                    Map.of("title", PREFIX + "Doc")
+            );
+            System.out.println("Search results (ClassA, title contains '" + PREFIX + "Doc'): " + searchResults.size());
+            for (DocumentResponse d : searchResults) {
+                System.out.println("- " + d.getId() + " title=" + d.getAttributes().get("title") + " acl=" + d.getAccessControlListId());
+            }
+
+            // Demo: download attachment presigned URL
+            System.out.println("\n=== Demo: Download Attachment URL ===");
+            List<DocumentDto> attachments = client.getDocumentAttachments(doc1.getId());
+            if (attachments != null && !attachments.isEmpty()) {
+                DocumentDto first = attachments.get(0);
+                String url = client.getAttachmentDownloadUrl(doc1.getId(), first.getId());
+                System.out.println("Download URL for attachment id=" + first.getId() + ":\n" + url);
+            } else {
+                System.out.println("No attachments found for doc1=" + doc1.getId() + ".");
+            }
+
+            System.out.println("\n=== Demo: Per-user document operations ===");
+            client.clearAuth();
+            for (SeededUser user : seededUsers) {
+                try {
+                    System.out.println("\n--- User flow for " + user.username() + " ---");
+                    loginAsUser(tenant, user.username(), user.password());
+
+                    String userAclId = (user.username().endsWith("user1") || user.username().endsWith("user3"))
+                            ? aclA.getId()
+                            : aclB.getId();
+
+                    DocumentResponse createdClassLevel = createSampleDocument(
+                            classA.getId(),
+                            userAclId,
+                            Map.of("title", PREFIX + user.username() + "_ClassLevel_Doc", "category", "USER")
+                    );
+                    System.out.println("User " + user.username() + " created ClassA doc: " + createdClassLevel.getId() + " acl=" + createdClassLevel.getAccessControlListId());
+
+                    DocumentResponse createdPerDoc = createSampleDocument(
+                            classB.getId(),
+                            userAclId,
+                            Map.of("title", PREFIX + user.username() + "_PerDoc_Doc", "department", "USER")
+                    );
+                    System.out.println("User " + user.username() + " created ClassB doc: " + createdPerDoc.getId() + " acl=" + createdPerDoc.getAccessControlListId());
+
+                    List<DocumentResponse> visibleDocs = client.getDocuments();
+                    System.out.println("User " + user.username() + " can see documents: " + (visibleDocs != null ? visibleDocs.size() : 0));
+
+                    DocumentResponse viewed = client.getDocument(createdPerDoc.getId());
+                    System.out.println("User " + user.username() + " viewed document: " + viewed.getId() + " title=" + viewed.getAttributes().get("title"));
+
+                    DocumentLockResponse userLock = client.lockDocument(createdPerDoc.getId(), 900);
+                    try {
+                        DocumentRequest updateRequest = new DocumentRequest();
+                        updateRequest.setDocumentClassId(createdPerDoc.getDocumentClassId());
+                        updateRequest.setAccessControlListId(createdPerDoc.getAccessControlListId());
+                        updateRequest.getAttributes().putAll(createdPerDoc.getAttributes());
+                        updateRequest.getAttributes().put("title", PREFIX + user.username() + "_PerDoc_Doc_UPDATED");
+
+                        DocumentResponse updated = client.updateDocument(createdPerDoc.getId(), updateRequest, userLock.getLockId());
+                        System.out.println("User " + user.username() + " updated document: " + updated.getId() + " title=" + updated.getAttributes().get("title"));
+                    } finally {
+                        safeRun(() -> client.unlockDocument(createdPerDoc.getId(), userLock.getLockId()));
+                    }
+                } catch (Exception e) {
+                    System.out.println("User " + user.username() + " document flow failed: " + e.getMessage());
+                } finally {
+                    client.clearAuth();
+                }
+            }
+
+            System.out.println("\n=== Sample data seeding completed ===");
+        }
     }
 
     private void loginAsAdmin(String username, String password) {
+        loginAsAdmin(client.getDefaultTenant(), username, password);
+    }
+
+    private void loginAsAdmin(String tenant, String username, String password) {
         LoginRequest request = new LoginRequest();
         request.setUsername(username);
         request.setPassword(password);
 
-        LoginResponse response = client.login(request);
+        LoginResponse response = client.login(tenant, request);
         client.setAuthToken(response.getToken());
         System.out.println("Logged in as admin: " + response.getUsername());
     }
 
     private void loginAsUser(String username, String password) {
+        loginAsUser(client.getDefaultTenant(), username, password);
+    }
+
+    private void loginAsUser(String tenant, String username, String password) {
         LoginRequest request = new LoginRequest();
         request.setUsername(username);
         request.setPassword(password);
 
-        LoginResponse response = client.login(request);
+        LoginResponse response = client.login(tenant, request);
         client.setAuthToken(response.getToken());
         System.out.println("Logged in as user: " + response.getUsername());
     }
 
-    private void cleanupSampleData() {
-        System.out.println("\n=== Cleanup (prefix: " + PREFIX + ") ===");
+    private void cleanupSampleData(String prefix) {
+        System.out.println("\n=== Cleanup (prefix: " + prefix + ") ===");
 
         // Documents (delete by seeded attribute)
         List<DocumentResponse> documents = safeList(client::getDocuments);
         if (documents != null) {
             for (DocumentResponse d : documents) {
                 Object title = d.getAttributes() != null ? d.getAttributes().get("title") : null;
-                if (title instanceof String && ((String) title).startsWith(PREFIX)) {
+                if (title instanceof String && ((String) title).startsWith(prefix)) {
                     safeRun(() -> {
                         DocumentLockResponse lock = client.lockDocument(d.getId(), 300);
                         try {
@@ -275,7 +288,7 @@ public class SampleDataSeeder {
         List<DocumentClassResponse> classes = safeList(client::getDocumentClasses);
         if (classes != null) {
             for (DocumentClassResponse dc : classes) {
-                if (dc.getName() != null && dc.getName().startsWith(PREFIX)) {
+                if (dc.getName() != null && dc.getName().startsWith(prefix)) {
                     safeRun(() -> client.deleteDocumentClass(dc.getId()));
                     System.out.println("Deleted document class: " + dc.getName());
                 }
@@ -286,7 +299,7 @@ public class SampleDataSeeder {
         List<AccessControlListResponse> acls = safeList(client::getAcls);
         if (acls != null) {
             for (AccessControlListResponse acl : acls) {
-                if (acl.getName() != null && acl.getName().startsWith(PREFIX)) {
+                if (acl.getName() != null && acl.getName().startsWith(prefix)) {
                     safeRun(() -> client.deleteAcl(acl.getId()));
                     System.out.println("Deleted ACL: " + acl.getName());
                 }
@@ -297,7 +310,7 @@ public class SampleDataSeeder {
         List<GroupResponse> groups = safeList(client::getGroups);
         if (groups != null) {
             for (GroupResponse group : groups) {
-                if (group.getName() != null && group.getName().startsWith(PREFIX)) {
+                if (group.getName() != null && group.getName().startsWith(prefix)) {
                     safeRun(() -> client.deleteGroup(group.getId()));
                     System.out.println("Deleted group: " + group.getName());
                 }
@@ -306,7 +319,7 @@ public class SampleDataSeeder {
 
         // Users
         for (int i = 1; i <= 4; i++) {
-            String username = PREFIX + "user" + i;
+            String username = prefix + "user" + i;
             try {
                 UserResponse user = client.getUserByUsername(username);
                 if (user != null && user.getId() != null) {
@@ -322,12 +335,16 @@ public class SampleDataSeeder {
         List<PrivilegeSetResponse> privilegeSets = safeList(client::getPrivilegeSets);
         if (privilegeSets != null) {
             for (PrivilegeSetResponse ps : privilegeSets) {
-                if (ps.getName() != null && ps.getName().startsWith(PREFIX)) {
+                if (ps.getName() != null && ps.getName().startsWith(prefix)) {
                     safeRun(() -> client.deletePrivilegeSet(ps.getId()));
                     System.out.println("Deleted privilege set: " + ps.getName());
                 }
             }
         }
+    }
+
+    private void cleanupSampleData() {
+        cleanupSampleData(PREFIX);
     }
 
     private PrivilegeSetResponse ensurePrivilegeSet(String name, String description, List<String> privilegeIds) {
@@ -343,7 +360,7 @@ public class SampleDataSeeder {
         return client.createPrivilegeSet(req);
     }
 
-    private LoginResponse registerUser(String username, String email, String password, String privilegeSetName) {
+    private LoginResponse registerUser(String tenant, String username, String email, String password, String privilegeSetName) {
         RegisterRequest request = new RegisterRequest();
         request.setUsername(username);
         request.setEmail(email);
@@ -351,19 +368,18 @@ public class SampleDataSeeder {
         request.setPrivilegeSetName(privilegeSetName);
 
         try {
-            LoginResponse response = client.register(request);
-            System.out.println("Registered user: " + username + " (id=" + response.getUserId() + ")");
+            LoginResponse response = client.register(tenant, request);
+            System.out.println("Registered user: " + response.getUsername());
             return response;
-        } catch (Exception e) {
-            // If already exists, fetch from admin endpoints
-            UserResponse existing = client.getUserByUsername(username);
-            LoginResponse r = new LoginResponse();
-            r.setUsername(existing.getUsername());
-            r.setUserId(existing.getId());
-            r.setPrivilegeSetId(existing.getPrivilegeSetId());
-            r.setPrivilegeSetName(existing.getPrivilegeSetName());
-            System.out.println("User already exists, reusing: " + username + " (id=" + existing.getId() + ")");
-            return r;
+        } catch (Exception ignored) {
+            // If user already exists (or register is restricted), fall back to login so we still get a token.
+            LoginRequest loginRequest = new LoginRequest();
+            loginRequest.setUsername(username);
+            loginRequest.setPassword(password);
+
+            LoginResponse response = client.login(tenant, loginRequest);
+            System.out.println("User already exists, logged in: " + response.getUsername());
+            return response;
         }
     }
 

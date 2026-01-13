@@ -11,6 +11,14 @@ public class LoginResponse {
     private String username;
     private String privilegeSetId;
     private String privilegeSetName;
+
+    public String getAccessToken() {
+        return token;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.token = accessToken;
+    }
     
     // Add getters/setters for backward compatibility with existing code that expects different field names
     public String getRefreshToken() {

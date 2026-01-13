@@ -65,7 +65,8 @@ public class DocumentApiCliApplication {
     private void showGuestMenu() {
         System.out.println("\n--- Guest Menu ---");
         System.out.println("1. Login");
-        System.out.println("2. Exit");
+        System.out.println("2. List Tenants");
+        System.out.println("3. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -75,6 +76,9 @@ public class DocumentApiCliApplication {
                 login();
                 break;
             case 2:
+                listTenantsTopLevel();
+                break;
+            case 3:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -89,8 +93,9 @@ public class DocumentApiCliApplication {
         System.out.println("2. Authorization Management");
         System.out.println("3. Data Model Management");
         System.out.println("4. Document Management");
-        System.out.println("5. Logout");
-        System.out.println("6. Exit");
+        System.out.println("5. List Tenants");
+        System.out.println("6. Logout");
+        System.out.println("7. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -109,9 +114,12 @@ public class DocumentApiCliApplication {
                 showDocumentManagementMenu();
                 break;
             case 5:
-                logout();
+                listTenantsTopLevel();
                 break;
             case 6:
+                logout();
+                break;
+            case 7:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -465,8 +473,10 @@ public class DocumentApiCliApplication {
             System.out.println("\n--- Authentication Management ---");
             System.out.println("1. List Users");
             System.out.println("2. List Groups");
-            System.out.println("3. Update User Privilege Set");
-            System.out.println("4. Back");
+            System.out.println("3. Create Group");
+            System.out.println("4. Add Users To Group");
+            System.out.println("5. Update User Privilege Set");
+            System.out.println("6. Back");
             System.out.print("Choose option: ");
 
             int choice = getIntInput();
@@ -478,13 +488,117 @@ public class DocumentApiCliApplication {
                     listGroups();
                     break;
                 case 3:
-                    updateUserPrivilegeSet();
+                    createGroup();
                     break;
                 case 4:
+                    addUsersToGroup();
+                    break;
+                case 5:
+                    updateUserPrivilegeSet();
+                    break;
+                case 6:
                     return;
                 default:
                     System.out.println("Invalid option!");
             }
+        }
+    }
+
+    private void createGroup() {
+        try {
+            System.out.print("Group name: ");
+            String name = scanner.nextLine().trim();
+            if (name.isEmpty()) {
+                System.out.println("Group name is required.");
+                return;
+            }
+            System.out.print("Description: ");
+            String description = scanner.nextLine().trim();
+
+            GroupRequest request = new GroupRequest();
+            request.setName(name);
+            request.setDescription(description);
+            request.setUserIds(new ArrayList<>());
+
+            GroupResponse created = client.createGroup(request);
+            System.out.println("Group created successfully!");
+            System.out.println("ID: " + created.getId());
+            System.out.println("Name: " + created.getName());
+        } catch (Exception e) {
+            System.out.println("Failed to create group: " + e.getMessage());
+        }
+    }
+
+    private void addUsersToGroup() {
+        try {
+            List<GroupResponse> groups = client.getGroups();
+            if (groups == null || groups.isEmpty()) {
+                System.out.println("No groups found. Create a group first.");
+                return;
+            }
+            List<UserResponse> users = client.getUsers();
+            if (users == null || users.isEmpty()) {
+                System.out.println("No users found.");
+                return;
+            }
+
+            System.out.println("\n--- Groups ---");
+            for (int i = 0; i < groups.size(); i++) {
+                GroupResponse g = groups.get(i);
+                System.out.println((i + 1) + ". " + g.getName() + " (ID: " + g.getId() + ")");
+            }
+            System.out.print("Choose a group (enter number): ");
+            int groupChoice = getIntInput();
+            if (groupChoice < 1 || groupChoice > groups.size()) {
+                System.out.println("Invalid choice!");
+                return;
+            }
+            GroupResponse selectedGroup = groups.get(groupChoice - 1);
+
+            System.out.println("\n--- Users ---");
+            for (int i = 0; i < users.size(); i++) {
+                UserResponse u = users.get(i);
+                System.out.println((i + 1) + ". " + u.getUsername() + " (ID: " + u.getId() + ")");
+            }
+
+            System.out.print("Enter user numbers to add (comma-separated): ");
+            String raw = scanner.nextLine().trim();
+            if (raw.isEmpty()) {
+                System.out.println("No users selected.");
+                return;
+            }
+
+            List<String> userIdsToAdd = new ArrayList<>();
+            for (String part : raw.split(",")) {
+                String trimmed = part.trim();
+                if (trimmed.isEmpty()) {
+                    continue;
+                }
+                int idx;
+                try {
+                    idx = Integer.parseInt(trimmed);
+                } catch (NumberFormatException nfe) {
+                    System.out.println("Invalid user number: " + trimmed);
+                    return;
+                }
+                if (idx < 1 || idx > users.size()) {
+                    System.out.println("User number out of range: " + idx);
+                    return;
+                }
+                userIdsToAdd.add(users.get(idx - 1).getId());
+            }
+
+            if (userIdsToAdd.isEmpty()) {
+                System.out.println("No users selected.");
+                return;
+            }
+
+            GroupResponse updated = client.addUsersToGroup(selectedGroup.getId(), userIdsToAdd);
+            System.out.println("Users added to group successfully!");
+            System.out.println("Group: " + updated.getName() + " (ID: " + updated.getId() + ")");
+            System.out.println("Users: " + updated.getUserNames());
+        } catch (Exception e) {
+            System.out.println("Failed to add users to group: " + e.getMessage());
         }
     }
 
@@ -935,8 +1049,9 @@ public class DocumentApiCliApplication {
     private void showUserMenu() {
         System.out.println("\n--- User Menu ---");
         System.out.println("1. Document Management");
-        System.out.println("2. Logout");
-        System.out.println("3. Exit");
+        System.out.println("2. List Tenants");
+        System.out.println("3. Logout");
+        System.out.println("4. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -946,9 +1061,12 @@ public class DocumentApiCliApplication {
                 showDocumentManagementMenu();
                 break;
             case 2:
-                logout();
+                listTenantsTopLevel();
                 break;
             case 3:
+                logout();
+                break;
+            case 4:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -957,7 +1075,38 @@ public class DocumentApiCliApplication {
         }
     }
 
+    private void listTenantsTopLevel() {
+        try {
+            List<TenantResponse> tenants = client.listTenants();
+            System.out.println("\n--- Tenants (" + (tenants != null ? tenants.size() : 0) + ") ---");
+            if (tenants == null || tenants.isEmpty()) {
+                return;
+            }
+
+            for (int i = 0; i < tenants.size(); i++) {
+                TenantResponse t = tenants.get(i);
+                System.out.println((i + 1) + ". " + t.getTenantKey() + " (enabled=" + t.isEnabled() + ")");
+            }
+
+            System.out.println("Current active tenant: " + client.getActiveTenant());
+            System.out.print("Switch active tenant? Enter number (or 0 to keep current): ");
+            int choice = getIntInput();
+            if (choice >= 1 && choice <= tenants.size()) {
+                TenantResponse selected = tenants.get(choice - 1);
+                client.setActiveTenant(selected.getTenantKey());
+                System.out.println("Active tenant set to: " + client.getActiveTenant());
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to list tenants: " + e.getMessage());
+        }
+    }
+
     private void login() {
+        System.out.println("Tenant (default: " + client.getActiveTenant() + "): ");
+        String tenant = scanner.nextLine().trim();
+        if (tenant.isEmpty()) {
+            tenant = client.getActiveTenant();
+        }
         System.out.print("Username: ");
         String username = scanner.nextLine();
         System.out.print("Password: ");
@@ -968,9 +1117,10 @@ public class DocumentApiCliApplication {
             request.setUsername(username);
             request.setPassword(password);
 
-            LoginResponse response = client.login(request);
+            LoginResponse response = client.login(tenant, request);
             currentUser = response;
-            client.setAuthToken(response.getToken());
+            client.setActiveTenant(tenant);
+            client.setAuthToken(tenant, response.getToken());
 
             System.out.println("Login successful!");
             System.out.println("Welcome, " + response.getUsername() + "!");

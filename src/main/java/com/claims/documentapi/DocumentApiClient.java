@@ -2,6 +2,7 @@ package com.claims.documentapi;
 
 import com.claims.documentapi.dto.*;
 import lombok.RequiredArgsConstructor;
+import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
@@ -19,6 +20,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Client library for Document Management API
@@ -38,11 +40,22 @@ public class DocumentApiClient {
     @Setter
     private String authToken;
 
+    private final Map<String, String> authTokensByTenant = new ConcurrentHashMap<>();
+
+    @Getter
+    @Setter
+    private String activeTenant;
+
+    @Setter
+    @Getter
+    private String defaultTenant = "claims";
+
     public static final String LOCK_HEADER = "X-Document-Lock-Id";
     
     public DocumentApiClient(String baseUrl) {
         this.restTemplate = new RestTemplate(new HttpComponentsClientHttpRequestFactory());
         this.baseUrl = baseUrl;
+        this.activeTenant = defaultTenant;
     }
 
     /**
@@ -50,6 +63,47 @@ public class DocumentApiClient {
      */
     public void clearAuth() {
         this.authToken = null;
+        if (activeTenant != null) {
+            authTokensByTenant.remove(activeTenant);
+        }
+    }
+
+    public void clearAuth(String tenant) {
+        if (tenant == null || tenant.isBlank()) {
+            return;
+        }
+        authTokensByTenant.remove(tenant);
+        if (tenant.equals(activeTenant)) {
+            this.authToken = null;
+        }
+    }
+
+    public void clearAllAuth() {
+        this.authToken = null;
+        authTokensByTenant.clear();
+    }
+
+    public void setAuthToken(String tenant, String token) {
+        if (tenant == null || tenant.isBlank()) {
+            this.authToken = token;
+            return;
+        }
+        if (token == null || token.isBlank()) {
+            authTokensByTenant.remove(tenant);
+        } else {
+            authTokensByTenant.put(tenant, token);
+        }
+        if (tenant.equals(activeTenant)) {
+            this.authToken = token;
+        }
+    }
+
+    public void setActiveTenant(String tenant) {
+        this.activeTenant = tenant;
+        if (tenant != null && !tenant.isBlank()) {
+            this.defaultTenant = tenant;
+            this.authToken = authTokensByTenant.get(tenant);
+        }
     }
     
     private HttpHeaders createHeaders() {
@@ -59,8 +113,12 @@ public class DocumentApiClient {
     private HttpHeaders createHeaders(String lockId) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        if (authToken != null) {
-            headers.setBearerAuth(authToken);
+        String effectiveToken = authToken;
+        if ((effectiveToken == null || effectiveToken.isBlank()) && activeTenant != null && !activeTenant.isBlank()) {
+            effectiveToken = authTokensByTenant.get(activeTenant);
+        }
+        if (effectiveToken != null && !effectiveToken.isBlank()) {
+            headers.setBearerAuth(effectiveToken);
         }
         if (lockId != null && !lockId.isBlank()) {
             headers.set(LOCK_HEADER, lockId);
@@ -98,9 +156,23 @@ public class DocumentApiClient {
     
     // Authentication endpoints
     public LoginResponse login(LoginRequest request) {
+        return login(defaultTenant, request);
+    }
+
+    public LoginResponse login(String tenant, LoginRequest request) {
         try {
-            ResponseEntity<LoginResponse> response = exchange("/api/auth/login", HttpMethod.POST, request, LoginResponse.class);
-            return response.getBody();
+            String endpoint = UriComponentsBuilder
+                    .fromPath("/api/auth/login")
+                    .queryParam("tenant", tenant)
+                    .toUriString();
+
+            ResponseEntity<LoginResponse> response = exchange(endpoint, HttpMethod.POST, request, LoginResponse.class);
+            LoginResponse body = response.getBody();
+            if (body != null && body.getToken() != null && !body.getToken().isBlank()) {
+                setAuthToken(tenant, body.getToken());
+                setActiveTenant(tenant);
+            }
+            return body;
         } catch (HttpClientErrorException e) {
             log.error("Login failed: {}", e.getResponseBodyAsString());
             throw e;
@@ -108,11 +180,37 @@ public class DocumentApiClient {
     }
     
     public LoginResponse register(RegisterRequest request) {
+        return register(defaultTenant, request);
+    }
+
+    public LoginResponse register(String tenant, RegisterRequest request) {
         try {
-            ResponseEntity<LoginResponse> response = exchange("/api/auth/register", HttpMethod.POST, request, LoginResponse.class);
-            return response.getBody();
+            String endpoint = UriComponentsBuilder
+                    .fromPath("/api/auth/register")
+                    .queryParam("tenant", tenant)
+                    .toUriString();
+
+            ResponseEntity<LoginResponse> response = exchange(endpoint, HttpMethod.POST, request, LoginResponse.class);
+            LoginResponse body = response.getBody();
+            if (body != null && body.getToken() != null && !body.getToken().isBlank()) {
+                setAuthToken(tenant, body.getToken());
+                setActiveTenant(tenant);
+            }
+            return body;
         } catch (HttpClientErrorException e) {
             log.error("Registration failed: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
+    public List<TenantResponse> listTenants() {
+        try {
+            ResponseEntity<List<TenantResponse>> response = exchange("/api/admin/tenants", HttpMethod.GET, null,
+                    new ParameterizedTypeReference<>() {
+                    });
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to list tenants: {}", e.getResponseBodyAsString());
             throw e;
         }
     }
@@ -269,6 +367,16 @@ public class DocumentApiClient {
         }
     }
 
+    public GroupResponse addUsersToGroup(String groupId, List<String> userIds) {
+        try {
+            ResponseEntity<GroupResponse> response = exchange("/api/admin/groups/" + groupId + "/users", HttpMethod.PATCH, userIds, GroupResponse.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to add users to group: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+
     // Privilege set endpoints
     public List<PrivilegeSetResponse> getPrivilegeSets() {
         try {
@@ -402,15 +510,6 @@ public class DocumentApiClient {
             return response.getBody();
         } catch (HttpClientErrorException e) {
             log.error("Failed to update privilege: {}", e.getResponseBodyAsString());
-            throw e;
-        }
-    }
-    
-    public void deletePrivilege(String id) {
-        try {
-            exchange("/api/admin/privileges/" + id, HttpMethod.DELETE, null, Void.class);
-        } catch (HttpClientErrorException e) {
-            log.error("Failed to delete privilege: {}", e.getResponseBodyAsString());
             throw e;
         }
     }

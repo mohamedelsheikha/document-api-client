@@ -17,4 +17,9 @@ public class DocumentAttachmentDto {
     private String uploadedBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    
+    private String scanStatus;
+    private LocalDateTime scannedAt;
+    private String scanThreatName;
+    private boolean quarantined;
 }

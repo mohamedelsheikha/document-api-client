@@ -860,4 +860,118 @@ public class DocumentApiClient {
     public String getBaseApiUrl() {
         return baseUrl;
     }
+    
+    // ========================================
+    // Malware Scan Admin Endpoints
+    // ========================================
+    
+    /**
+     * Get all quarantined files
+     * @return list of quarantined document attachments
+     */
+    public List<DocumentAttachmentDto> getQuarantinedFiles() {
+        try {
+            ResponseEntity<List<DocumentAttachmentDto>> response = exchange(
+                "/api/admin/malware-scan/quarantined", 
+                HttpMethod.GET, 
+                null,
+                new ParameterizedTypeReference<>() {}
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get quarantined files: {}", e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
+    /**
+     * Get malware scan status for a specific attachment
+     * @param attachmentId the attachment ID
+     * @return the attachment with scan status
+     */
+    public DocumentAttachmentDto getMalwareScanStatus(String attachmentId) {
+        try {
+            ResponseEntity<DocumentAttachmentDto> response = exchange(
+                "/api/admin/malware-scan/status/" + attachmentId, 
+                HttpMethod.GET, 
+                null, 
+                DocumentAttachmentDto.class
+            );
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to get malware scan status for attachment {}: {}", 
+                attachmentId, e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
+    /**
+     * Simulate a clean malware scan for an attachment (testing only)
+     * @param attachmentId the attachment ID to simulate clean scan for
+     */
+    public void simulateCleanScan(String attachmentId) {
+        try {
+            exchange(
+                "/api/admin/malware-scan/simulate-clean/" + attachmentId, 
+                HttpMethod.POST, 
+                null, 
+                Void.class
+            );
+            log.info("Simulated clean scan for attachment: {}", attachmentId);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to simulate clean scan for attachment {}: {}", 
+                attachmentId, e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
+    /**
+     * Simulate an infected malware scan for an attachment (testing only)
+     * @param attachmentId the attachment ID to simulate infected scan for
+     * @param threatName the threat name to use in the simulation (optional, defaults to "Test-Malware")
+     */
+    public void simulateInfectedScan(String attachmentId, String threatName) {
+        try {
+            String endpoint = UriComponentsBuilder
+                .fromPath("/api/admin/malware-scan/simulate-infected/" + attachmentId)
+                .queryParam("threatName", threatName != null ? threatName : "Test-Malware")
+                .toUriString();
+            
+            exchange(endpoint, HttpMethod.POST, null, Void.class);
+            log.info("Simulated infected scan for attachment: {} with threat: {}", 
+                attachmentId, threatName);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to simulate infected scan for attachment {}: {}", 
+                attachmentId, e.getResponseBodyAsString());
+            throw e;
+        }
+    }
+    
+    /**
+     * Simulate an infected malware scan with default threat name
+     * @param attachmentId the attachment ID to simulate infected scan for
+     */
+    public void simulateInfectedScan(String attachmentId) {
+        simulateInfectedScan(attachmentId, "Test-Malware");
+    }
+    
+    /**
+     * Delete a quarantined file
+     * @param attachmentId the attachment ID to delete
+     */
+    public void deleteQuarantinedFile(String attachmentId) {
+        try {
+            exchange(
+                "/api/admin/malware-scan/quarantined/" + attachmentId, 
+                HttpMethod.DELETE, 
+                null, 
+                Void.class
+            );
+            log.info("Deleted quarantined file: {}", attachmentId);
+        } catch (HttpClientErrorException e) {
+            log.error("Failed to delete quarantined file {}: {}", 
+                attachmentId, e.getResponseBodyAsString());
+            throw e;
+        }
+    }
 }

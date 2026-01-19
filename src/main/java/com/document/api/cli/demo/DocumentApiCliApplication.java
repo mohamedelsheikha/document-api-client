@@ -93,9 +93,10 @@ public class DocumentApiCliApplication {
         System.out.println("2. Authorization Management");
         System.out.println("3. Data Model Management");
         System.out.println("4. Document Management");
-        System.out.println("5. List Tenants");
-        System.out.println("6. Logout");
-        System.out.println("7. Exit");
+        System.out.println("5. Malware Scan Management");
+        System.out.println("6. List Tenants");
+        System.out.println("7. Logout");
+        System.out.println("8. Exit");
         System.out.print("Choose option: ");
 
         int choice = getIntInput();
@@ -114,12 +115,15 @@ public class DocumentApiCliApplication {
                 showDocumentManagementMenu();
                 break;
             case 5:
-                listTenantsTopLevel();
+                showMalwareScanManagementMenu();
                 break;
             case 6:
-                logout();
+                listTenantsTopLevel();
                 break;
             case 7:
+                logout();
+                break;
+            case 8:
                 System.out.println("Goodbye!");
                 System.exit(0);
                 break;
@@ -2042,6 +2046,205 @@ public class DocumentApiCliApplication {
             return Integer.parseInt(scanner.nextLine());
         } catch (NumberFormatException e) {
             return -1;
+        }
+    }
+    
+    // ========================================
+    // Malware Scan Management
+    // ========================================
+    
+    private void showMalwareScanManagementMenu() {
+        while (true) {
+            System.out.println("\n--- Malware Scan Management ---");
+            System.out.println("1. List Quarantined Files");
+            System.out.println("2. Check Attachment Scan Status");
+            System.out.println("3. Simulate Clean Scan (Testing)");
+            System.out.println("4. Simulate Infected Scan (Testing)");
+            System.out.println("5. Delete Quarantined File");
+            System.out.println("6. Back");
+            System.out.print("Choose option: ");
+
+            int choice = getIntInput();
+            switch (choice) {
+                case 1:
+                    listQuarantinedFiles();
+                    break;
+                case 2:
+                    checkAttachmentScanStatus();
+                    break;
+                case 3:
+                    simulateCleanScan();
+                    break;
+                case 4:
+                    simulateInfectedScan();
+                    break;
+                case 5:
+                    deleteQuarantinedFile();
+                    break;
+                case 6:
+                    return;
+                default:
+                    System.out.println("Invalid option!");
+            }
+        }
+    }
+    
+    private void listQuarantinedFiles() {
+        try {
+            List<DocumentAttachmentDto> quarantined = client.getQuarantinedFiles();
+            System.out.println("\n--- Quarantined Files (" + (quarantined != null ? quarantined.size() : 0) + ") ---");
+            
+            if (quarantined == null || quarantined.isEmpty()) {
+                System.out.println("No quarantined files found.");
+                return;
+            }
+            
+            for (DocumentAttachmentDto attachment : quarantined) {
+                System.out.println("\n--- Attachment ---");
+                System.out.println("ID: " + attachment.getId());
+                System.out.println("Document ID: " + attachment.getDocumentId());
+                System.out.println("File Name: " + attachment.getFileName());
+                System.out.println("Original Name: " + attachment.getOriginalFileName());
+                System.out.println("Size: " + formatFileSize(attachment.getFileSize()));
+                System.out.println("Scan Status: " + attachment.getScanStatus());
+                System.out.println("Threat Name: " + attachment.getScanThreatName());
+                System.out.println("Scanned At: " + attachment.getScannedAt());
+                System.out.println("Quarantined: " + attachment.isQuarantined());
+                System.out.println("---");
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to list quarantined files: " + e.getMessage());
+        }
+    }
+    
+    private void checkAttachmentScanStatus() {
+        try {
+            System.out.print("Attachment ID: ");
+            String attachmentId = scanner.nextLine().trim();
+            
+            if (attachmentId.isEmpty()) {
+                System.out.println("Attachment ID is required.");
+                return;
+            }
+            
+            DocumentAttachmentDto attachment = client.getMalwareScanStatus(attachmentId);
+            
+            if (attachment == null) {
+                System.out.println("Attachment not found.");
+                return;
+            }
+            
+            System.out.println("\n--- Attachment Scan Status ---");
+            System.out.println("ID: " + attachment.getId());
+            System.out.println("Document ID: " + attachment.getDocumentId());
+            System.out.println("File Name: " + attachment.getFileName());
+            System.out.println("Original Name: " + attachment.getOriginalFileName());
+            System.out.println("Size: " + formatFileSize(attachment.getFileSize()));
+            System.out.println("Content Type: " + attachment.getContentType());
+            System.out.println("Uploaded By: " + attachment.getUploadedBy());
+            System.out.println("Created At: " + attachment.getCreatedAt());
+            System.out.println("\n--- Malware Scan Info ---");
+            System.out.println("Scan Status: " + (attachment.getScanStatus() != null ? attachment.getScanStatus() : "NOT_SCANNED"));
+            System.out.println("Scanned At: " + (attachment.getScannedAt() != null ? attachment.getScannedAt() : "N/A"));
+            System.out.println("Threat Name: " + (attachment.getScanThreatName() != null ? attachment.getScanThreatName() : "N/A"));
+            System.out.println("Quarantined: " + (attachment.isQuarantined() ? "YES" : "NO"));
+            
+            if (attachment.isQuarantined()) {
+                System.out.println("\n⚠️  WARNING: This file is quarantined and cannot be downloaded!");
+            } else if ("CLEAN".equals(attachment.getScanStatus())) {
+                System.out.println("\n✓ This file is safe to download.");
+            } else if ("PENDING".equals(attachment.getScanStatus())) {
+                System.out.println("\n⏳ Scan is pending. Please check again later.");
+            }
+            
+        } catch (Exception e) {
+            System.out.println("Failed to check scan status: " + e.getMessage());
+        }
+    }
+    
+    private void simulateCleanScan() {
+        try {
+            System.out.print("Attachment ID to simulate clean scan: ");
+            String attachmentId = scanner.nextLine().trim();
+            
+            if (attachmentId.isEmpty()) {
+                System.out.println("Attachment ID is required.");
+                return;
+            }
+            
+            System.out.println("Simulating clean scan for attachment: " + attachmentId);
+            client.simulateCleanScan(attachmentId);
+            System.out.println("✓ Clean scan simulated successfully!");
+            System.out.println("The attachment should now be marked as CLEAN.");
+            
+        } catch (Exception e) {
+            System.out.println("Failed to simulate clean scan: " + e.getMessage());
+        }
+    }
+    
+    private void simulateInfectedScan() {
+        try {
+            System.out.print("Attachment ID to simulate infected scan: ");
+            String attachmentId = scanner.nextLine().trim();
+            
+            if (attachmentId.isEmpty()) {
+                System.out.println("Attachment ID is required.");
+                return;
+            }
+            
+            System.out.print("Threat name (leave empty for 'Test-Malware'): ");
+            String threatName = scanner.nextLine().trim();
+            
+            if (threatName.isEmpty()) {
+                threatName = "Test-Malware";
+            }
+            
+            System.out.println("Simulating infected scan for attachment: " + attachmentId);
+            System.out.println("Threat name: " + threatName);
+            client.simulateInfectedScan(attachmentId, threatName);
+            System.out.println("⚠️  Infected scan simulated successfully!");
+            System.out.println("The attachment should now be marked as INFECTED and quarantined.");
+            
+        } catch (Exception e) {
+            System.out.println("Failed to simulate infected scan: " + e.getMessage());
+        }
+    }
+    
+    private void deleteQuarantinedFile() {
+        try {
+            System.out.print("Quarantined Attachment ID to delete: ");
+            String attachmentId = scanner.nextLine().trim();
+            
+            if (attachmentId.isEmpty()) {
+                System.out.println("Attachment ID is required.");
+                return;
+            }
+            
+            System.out.print("Are you sure you want to delete this quarantined file? (yes/no): ");
+            String confirmation = scanner.nextLine().trim().toLowerCase();
+            
+            if (!confirmation.equals("yes") && !confirmation.equals("y")) {
+                System.out.println("Deletion cancelled.");
+                return;
+            }
+            
+            client.deleteQuarantinedFile(attachmentId);
+            System.out.println("✓ Quarantined file deleted successfully!");
+            
+        } catch (Exception e) {
+            System.out.println("Failed to delete quarantined file: " + e.getMessage());
+        }
+    }
+    
+    private String formatFileSize(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.2f KB", bytes / 1024.0);
+        } else if (bytes < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
+        } else {
+            return String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
         }
     }
 }
